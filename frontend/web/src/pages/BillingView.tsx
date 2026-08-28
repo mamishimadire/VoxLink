@@ -62,30 +62,40 @@ interface Analytics {
   byDestination: DestinationUsageRow[];
 }
 
+interface ClientUsageRow {
+  companyId: string;
+  companyName: string;
+  callCount: number;
+  totalMinutes: number;
+}
+
 export function BillingView() {
-  const { token, role } = useAuth();
+  const { token, role, isPlatformAdmin } = useAuth();
   const canManage = role === "owner" || role === "admin";
 
   const [usage, setUsage] = useState<Usage | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [agreement, setAgreement] = useState<Agreement | null>(null);
   const [isInternal, setIsInternal] = useState(false);
+  const [clientUsage, setClientUsage] = useState<ClientUsageRow[] | null>(null);
   const [fullName, setFullName] = useState("");
   const [agree, setAgree] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
-    const [usageResult, companyResult, agreementResult, analyticsResult] = await Promise.allSettled([
+    const [usageResult, companyResult, agreementResult, analyticsResult, clientUsageResult] = await Promise.allSettled([
       api.get<Usage>("/api/billing/usage", token),
       api.get<{ isInternal: boolean }>("/api/companies/me", token),
       api.get<Agreement>("/api/billing/agreement", token),
       api.get<Analytics>("/api/billing/analytics", token),
+      isPlatformAdmin ? api.get<ClientUsageRow[]>("/api/platform/usage", token) : Promise.resolve(null),
     ]);
     if (usageResult.status === "fulfilled") setUsage(usageResult.value);
     if (companyResult.status === "fulfilled") setIsInternal(companyResult.value.isInternal);
     if (agreementResult.status === "fulfilled") setAgreement(agreementResult.value);
     if (analyticsResult.status === "fulfilled") setAnalytics(analyticsResult.value);
+    if (clientUsageResult.status === "fulfilled" && clientUsageResult.value) setClientUsage(clientUsageResult.value);
   }
 
   useEffect(() => {
@@ -203,6 +213,41 @@ export function BillingView() {
               </table>
             </div>
           </div>
+        </>
+      )}
+
+      {isPlatformAdmin && clientUsage && (
+        <>
+          <h2>Client usage</h2>
+          <p className="hint">Calls and minutes used by each client company, across all time.</p>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Calls</th>
+                <th>Minutes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientUsage
+                .slice()
+                .sort((a, b) => b.totalMinutes - a.totalMinutes)
+                .map((row) => (
+                  <tr key={row.companyId}>
+                    <td>{row.companyName}</td>
+                    <td>{row.callCount}</td>
+                    <td>{row.totalMinutes}</td>
+                  </tr>
+                ))}
+              {clientUsage.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="muted">
+                    No client companies yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </>
       )}
 

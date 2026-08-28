@@ -333,7 +333,9 @@ public class PlatformController : ControllerBase
     {
         // Each call rounds up to the minute individually before summing —
         // matches how usage/invoices bill (two 9-second calls are 2 minutes,
-        // not one minute from summing the raw seconds first).
+        // not one minute from summing the raw seconds first). Excludes
+        // VoxLink's own internal company: it's not a client, and has its own
+        // dedicated usage/billing view.
         var callUsage = await _db.Database
             .SqlQuery<CompanyUsageRow>($@"
                 select c.id as company_id, c.name as company_name,
@@ -341,6 +343,7 @@ public class PlatformController : ControllerBase
                        coalesce(sum(ceil(calls.duration_seconds::numeric / 60)), 0) as total_minutes
                 from companies c
                 left join calls on calls.company_id = c.id
+                where not c.is_internal
                 group by c.id, c.name
                 order by c.name")
             .ToListAsync(cancellationToken);
