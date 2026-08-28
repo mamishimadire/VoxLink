@@ -7,6 +7,8 @@ public class Company
     public string? RegistrationNumber { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public string? Country { get; set; }
+    public string? Region { get; set; }
     public string Status { get; set; } = "active";
 
     public string? PrimaryContactName { get; set; }

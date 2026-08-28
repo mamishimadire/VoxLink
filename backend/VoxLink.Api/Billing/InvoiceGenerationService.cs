@@ -8,6 +8,10 @@ using VoxLink.Api.Storage;
 
 namespace VoxLink.Api.Billing;
 
+public record InvoicePreview(
+    Guid CompanyId, string CompanyName, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd,
+    List<InvoiceLineItem> LineItems, decimal AmountDue);
+
 public class InvoiceGenerationService
 {
     // Cross-tenant by design (iterates every company's subscriptions), so it
@@ -99,8 +103,8 @@ public class InvoiceGenerationService
             company.Status = "suspended";
             company.UpdatedAt = DateTimeOffset.UtcNow;
 
-            var recipient = company.AdminContactEmail ?? company.BillingContactEmail ?? company.Email;
-            if (!string.IsNullOrWhiteSpace(recipient))
+            var recipients = await GetOwnerAdminEmailsAsync(company.Id, cancellationToken);
+            foreach (var recipient in recipients)
             {
                 try
                 {
@@ -142,13 +146,7 @@ public class InvoiceGenerationService
     /// </summary>
     public async Task<Invoice> GenerateAdHocInvoiceAsync(Guid companyId, CancellationToken cancellationToken)
     {
-        var subscription = await _db.Subscriptions
-            .Include(s => s.Plan)
-            .Where(s => s.CompanyId == companyId)
-            .OrderByDescending(s => s.CreatedAt)
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? throw new InvalidOperationException("No plan/subscription to bill against yet.");
-
+        var subscription = await GetLatestSubscriptionAsync(companyId, cancellationToken);
         var periodEnd = DateTimeOffset.UtcNow;
         var invoice = await GenerateInvoiceCoreAsync(
             companyId, subscription.Id, subscription.Plan!, subscription.CurrentPeriodStart, periodEnd, cancellationToken);
@@ -159,6 +157,36 @@ public class InvoiceGenerationService
         await _db.SaveChangesAsync(cancellationToken);
         return invoice;
     }
+
+    /// <summary>
+    /// Computes what an ad-hoc invoice would look like — company, period,
+    /// line items, amount due — without creating, storing, or emailing
+    /// anything. Backs the "preview before you commit" step in the UI.
+    /// </summary>
+    public async Task<InvoicePreview> PreviewAdHocInvoiceAsync(Guid companyId, CancellationToken cancellationToken)
+    {
+        var subscription = await GetLatestSubscriptionAsync(companyId, cancellationToken);
+        var company = await _db.Companies.FirstAsync(c => c.Id == companyId, cancellationToken);
+        var periodEnd = DateTimeOffset.UtcNow;
+
+        var calls = await _db.Calls
+            .Where(c => c.CompanyId == companyId && c.CreatedAt >= subscription.CurrentPeriodStart && c.CreatedAt < periodEnd)
+            .Select(c => new CallUsageRow(c.DestinationNumber, c.DurationSeconds))
+            .ToListAsync(cancellationToken);
+
+        var usage = UsageCalculator.Compute(calls, subscription.Plan!, _billingOptions.LocalCountryCode);
+
+        return new InvoicePreview(
+            company.Id, company.Name, subscription.CurrentPeriodStart, periodEnd, usage.LineItems, usage.AmountDue);
+    }
+
+    private async Task<Subscription> GetLatestSubscriptionAsync(Guid companyId, CancellationToken cancellationToken) =>
+        await _db.Subscriptions
+            .Include(s => s.Plan)
+            .Where(s => s.CompanyId == companyId)
+            .OrderByDescending(s => s.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("No plan/subscription to bill against yet.");
 
     private async Task<Invoice> GenerateInvoiceCoreAsync(
         Guid companyId, Guid subscriptionId, Plan plan, DateTimeOffset periodStart, DateTimeOffset periodEnd, CancellationToken cancellationToken)
@@ -203,8 +231,8 @@ public class InvoiceGenerationService
 
         _db.Invoices.Add(invoice);
 
-        var recipient = company.AdminContactEmail ?? company.BillingContactEmail ?? company.Email;
-        if (!string.IsNullOrWhiteSpace(recipient))
+        var recipients = await GetOwnerAdminEmailsAsync(company.Id, cancellationToken);
+        foreach (var recipient in recipients)
         {
             try
             {
@@ -223,4 +251,15 @@ public class InvoiceGenerationService
 
         return invoice;
     }
+
+    /// <summary>
+    /// Billing communication (invoices, overdue-suspension notices) goes to
+    /// the company's actual owner/admin user accounts — never a generic
+    /// contact-field address and never regular employees.
+    /// </summary>
+    private async Task<List<string>> GetOwnerAdminEmailsAsync(Guid companyId, CancellationToken cancellationToken) =>
+        await _db.Users
+            .Where(u => u.CompanyId == companyId && (u.Role == "owner" || u.Role == "admin") && u.Status != "suspended")
+            .Select(u => u.Email)
+            .ToListAsync(cancellationToken);
 }

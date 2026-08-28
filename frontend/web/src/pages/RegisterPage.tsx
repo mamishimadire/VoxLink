@@ -18,6 +18,9 @@ interface Plan {
 
 export function RegisterPage() {
   const [companyName, setCompanyName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState("");
+  const [region, setRegion] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -46,6 +49,9 @@ export function RegisterPage() {
     try {
       const res = await api.post<AuthResponse>("/api/auth/register-company", {
         companyName,
+        phone,
+        country,
+        region,
         adminFirstName: firstName,
         adminLastName: lastName,
         adminEmail: email,
@@ -77,6 +83,22 @@ export function RegisterPage() {
           Company name
           <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} required autoFocus />
         </label>
+
+        <label>
+          Phone number
+          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+        </label>
+
+        <div className="row">
+          <label>
+            Country
+            <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="e.g. South Africa" required />
+          </label>
+          <label>
+            Province / region
+            <input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Gauteng" required />
+          </label>
+        </div>
 
         <div className="row">
           <label>

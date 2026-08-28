@@ -12,6 +12,9 @@ namespace VoxLink.Api.Controllers;
 
 public record OnboardClientRequest(
     string CompanyName,
+    string Phone,
+    string Country,
+    string Region,
     string PrimaryContactName,
     string PrimaryContactEmail,
     string? BillingContactName,
@@ -190,6 +193,9 @@ public class PlatformController : ControllerBase
         {
             Id = Guid.NewGuid(),
             Name = request.CompanyName,
+            Phone = request.Phone,
+            Country = request.Country,
+            Region = request.Region,
             Status = "pending",
             PrimaryContactName = request.PrimaryContactName,
             PrimaryContactEmail = request.PrimaryContactEmail,
@@ -665,6 +671,40 @@ public class PlatformController : ControllerBase
     {
         var generated = await _invoiceGenerationService.RunOnceAsync(cancellationToken);
         return Ok(new { message = $"{generated} invoice(s) generated." });
+    }
+
+    /// <summary>
+    /// Lets a platform admin preview, then commit, an ad-hoc invoice for any
+    /// chosen client company — the "pick a client, preview, complete and
+    /// send or cancel" flow, mirroring a client's own self-service generate
+    /// but for any company instead of just the caller's own.
+    /// </summary>
+    [HttpGet("companies/{companyId:guid}/invoices/preview")]
+    public async Task<IActionResult> PreviewClientInvoice(Guid companyId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var preview = await _invoiceGenerationService.PreviewAdHocInvoiceAsync(companyId, cancellationToken);
+            return Ok(preview);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("companies/{companyId:guid}/invoices/generate")]
+    public async Task<IActionResult> GenerateClientInvoice(Guid companyId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var invoice = await _invoiceGenerationService.GenerateAdHocInvoiceAsync(companyId, cancellationToken);
+            return Ok(new { message = $"Invoice {invoice.InvoiceNumber} generated for R{invoice.AmountDue:0.00}.", invoice.Id, invoice.InvoiceNumber });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     private static string[] SplitName(string fullName)

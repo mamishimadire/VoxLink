@@ -323,6 +323,31 @@ public class BillingController : ControllerBase
     }
 
     /// <summary>
+    /// Shows what an ad-hoc invoice would look like — line items, amount due
+    /// — before committing to actually creating and emailing it.
+    /// </summary>
+    [HttpGet("invoices/preview")]
+    public async Task<IActionResult> PreviewInvoice(CancellationToken cancellationToken)
+    {
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole is not ("owner" or "admin"))
+        {
+            return Forbid();
+        }
+
+        var companyId = User.GetCompanyId();
+        try
+        {
+            var preview = await _invoiceGenerationService.PreviewAdHocInvoiceAsync(companyId, cancellationToken);
+            return Ok(preview);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Owner/admin-triggered invoice covering usage from the current
     /// subscription period's start through now — for a client that wants an
     /// early invoice, or for VoxLink's own internal team checking what their

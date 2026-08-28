@@ -10,6 +10,9 @@ namespace VoxLink.Api.Controllers;
 
 public record RegisterCompanyRequest(
     string CompanyName,
+    string Phone,
+    string Country,
+    string Region,
     string AdminFirstName,
     string AdminLastName,
     string AdminEmail,
@@ -79,6 +82,9 @@ public class AuthController : ControllerBase
         {
             Id = Guid.NewGuid(),
             Name = request.CompanyName,
+            Phone = request.Phone,
+            Country = request.Country,
+            Region = request.Region,
             Status = isFirstAccountInSystem ? "active" : "pending",
             IsInternal = isFirstAccountInSystem,
             CreatedAt = now,

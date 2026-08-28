@@ -42,6 +42,9 @@ interface PendingPayment {
 
 const emptyForm = {
   companyName: "",
+  phone: "",
+  country: "",
+  region: "",
   primaryContactName: "",
   primaryContactEmail: "",
   billingContactName: "",
@@ -378,6 +381,22 @@ export function PlatformAdminView() {
           Client name
           <input value={form.companyName} onChange={(e) => update("companyName", e.target.value)} required />
         </label>
+
+        <label>
+          Phone number
+          <input type="tel" value={form.phone} onChange={(e) => update("phone", e.target.value)} required />
+        </label>
+
+        <div className="row">
+          <label>
+            Country
+            <input value={form.country} onChange={(e) => update("country", e.target.value)} placeholder="e.g. South Africa" required />
+          </label>
+          <label>
+            Province / region
+            <input value={form.region} onChange={(e) => update("region", e.target.value)} placeholder="e.g. Gauteng" required />
+          </label>
+        </div>
 
         <div className="contact-grid">
           <span></span>

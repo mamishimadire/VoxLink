@@ -20,20 +20,47 @@ interface Filters {
   to: string;
 }
 
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+interface PreviewLineItem {
+  description: string;
+  amount: number;
+}
+
+interface Preview {
+  companyId: string;
+  companyName: string;
+  periodStart: string;
+  periodEnd: string;
+  lineItems: PreviewLineItem[];
+  amountDue: number;
+}
+
 const emptyFilters: Filters = { number: "", status: "", year: "", from: "", to: "" };
 
 export function InvoicesView() {
-  const { token, role } = useAuth();
+  const { token, role, isPlatformAdmin, claims } = useAuth();
   const canManage = role === "owner" || role === "admin";
+  const ownCompanyId = claims?.company_id ?? "";
 
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [clients, setClients] = useState<ClientOption[] | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [committing, setCommitting] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -68,18 +95,73 @@ export function InvoicesView() {
     setFilters(emptyFilters);
   }
 
-  async function handleGenerate() {
-    setGenerating(true);
+  async function loadPreview(companyId: string) {
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreview(null);
+    try {
+      const path =
+        isPlatformAdmin && companyId !== ownCompanyId
+          ? `/api/platform/companies/${companyId}/invoices/preview`
+          : "/api/billing/invoices/preview";
+      const data = await api.get<Preview>(path, token);
+      setPreview(data);
+    } catch (err) {
+      setPreviewError(err instanceof ApiError ? err.message : "Failed to build invoice preview.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  async function openGenerateModal() {
+    setModalOpen(true);
     setMessage(null);
     setError(null);
+
+    if (isPlatformAdmin) {
+      setSelectedClientId(ownCompanyId);
+      if (clients === null) {
+        try {
+          const list = await api.get<{ id: string; name: string }[]>("/api/platform/companies", token);
+          setClients([{ id: ownCompanyId, name: "VoxLink (internal usage)" }, ...list.map((c) => ({ id: c.id, name: c.name }))]);
+        } catch (err) {
+          setPreviewError(err instanceof ApiError ? err.message : "Failed to load client list.");
+        }
+      }
+      await loadPreview(ownCompanyId);
+    } else {
+      await loadPreview(ownCompanyId);
+    }
+  }
+
+  function closeGenerateModal() {
+    setModalOpen(false);
+    setPreview(null);
+    setPreviewError(null);
+  }
+
+  function handleChooseClient(companyId: string) {
+    setSelectedClientId(companyId);
+    loadPreview(companyId);
+  }
+
+  async function handleComplete() {
+    if (!preview) return;
+    setCommitting(true);
+    setPreviewError(null);
     try {
-      const res = await api.post<{ message: string }>("/api/billing/invoices/generate", {}, token);
+      const path =
+        isPlatformAdmin && preview.companyId !== ownCompanyId
+          ? `/api/platform/companies/${preview.companyId}/invoices/generate`
+          : "/api/billing/invoices/generate";
+      const res = await api.post<{ message: string }>(path, {}, token);
       setMessage(res.message);
+      closeGenerateModal();
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to generate invoice.");
+      setPreviewError(err instanceof ApiError ? err.message : "Failed to generate invoice.");
     } finally {
-      setGenerating(false);
+      setCommitting(false);
     }
   }
 
@@ -164,8 +246,8 @@ export function InvoicesView() {
           </button>
           <div style={{ flex: 1 }} />
           {canManage && (
-            <button type="button" onClick={handleGenerate} disabled={generating}>
-              {generating ? "Generating…" : "Generate invoice now"}
+            <button type="button" onClick={openGenerateModal}>
+              Generate invoice
             </button>
           )}
         </div>
@@ -230,6 +312,72 @@ export function InvoicesView() {
               Upload
             </button>
             <button type="button" className="link-btn" onClick={() => setUploadingFor(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {modalOpen && (
+        <div className="card inline-card">
+          <h2>Generate invoice</h2>
+
+          {isPlatformAdmin && (
+            <label>
+              Client
+              <select value={selectedClientId} onChange={(e) => handleChooseClient(e.target.value)}>
+                {clients === null ? (
+                  <option>Loading…</option>
+                ) : (
+                  clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+          )}
+
+          {previewError && <div className="error">{previewError}</div>}
+
+          {previewLoading && <p className="hint">Building preview…</p>}
+
+          {!previewLoading && preview && (
+            <div className="card inline-card">
+              <p>
+                <strong>{preview.companyName}</strong>
+              </p>
+              <p className="muted">
+                Period: {preview.periodStart.slice(0, 10)} – {preview.periodEnd.slice(0, 10)}
+              </p>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.lineItems.map((item, i) => (
+                    <tr key={i}>
+                      <td>{item.description}</td>
+                      <td>R{item.amount.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p>
+                Total due: <strong>R{preview.amountDue.toFixed(2)}</strong>
+              </p>
+            </div>
+          )}
+
+          <div className="row">
+            <button type="button" disabled={!preview || previewLoading || committing} onClick={handleComplete}>
+              {committing ? "Sending…" : "Complete and send"}
+            </button>
+            <button type="button" className="link-btn" onClick={closeGenerateModal}>
               Cancel
             </button>
           </div>
