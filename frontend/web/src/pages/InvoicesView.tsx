@@ -44,6 +44,9 @@ const emptyFilters: Filters = { number: "", status: "", year: "", from: "", to: 
 export function InvoicesView() {
   const { token, role, isPlatformAdmin, claims } = useAuth();
   const canManage = role === "owner" || role === "admin";
+  // Only VoxLink generates invoices — for a client or for its own internal
+  // usage. A client never generates its own invoice, only views/pays one.
+  const canGenerate = isPlatformAdmin && canManage;
   const ownCompanyId = claims?.company_id ?? "";
 
   const [filters, setFilters] = useState<Filters>(emptyFilters);
@@ -245,7 +248,7 @@ export function InvoicesView() {
             Clear filters
           </button>
           <div style={{ flex: 1 }} />
-          {canManage && (
+          {canGenerate && (
             <button type="button" onClick={openGenerateModal}>
               Generate invoice
             </button>

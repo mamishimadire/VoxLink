@@ -325,16 +325,14 @@ public class BillingController : ControllerBase
     /// <summary>
     /// Shows what an ad-hoc invoice would look like — line items, amount due
     /// — before committing to actually creating and emailing it.
+    /// Platform-admin only: a client never generates its own invoice, only
+    /// VoxLink generates invoices for its clients (and for its own internal
+    /// usage).
     /// </summary>
     [HttpGet("invoices/preview")]
+    [Authorize(Policy = "PlatformAdmin")]
     public async Task<IActionResult> PreviewInvoice(CancellationToken cancellationToken)
     {
-        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-        if (callerRole is not ("owner" or "admin"))
-        {
-            return Forbid();
-        }
-
         var companyId = User.GetCompanyId();
         try
         {
@@ -348,20 +346,15 @@ public class BillingController : ControllerBase
     }
 
     /// <summary>
-    /// Owner/admin-triggered invoice covering usage from the current
-    /// subscription period's start through now — for a client that wants an
-    /// early invoice, or for VoxLink's own internal team checking what their
-    /// call usage is costing them without waiting for month-end.
+    /// Platform-admin-triggered invoice covering usage from the current
+    /// subscription period's start through now, for VoxLink's own internal
+    /// usage. (A platform admin generating for a specific client instead
+    /// uses PlatformController's companies/{id}/invoices/generate.)
     /// </summary>
     [HttpPost("invoices/generate")]
+    [Authorize(Policy = "PlatformAdmin")]
     public async Task<IActionResult> GenerateInvoice(CancellationToken cancellationToken)
     {
-        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-        if (callerRole is not ("owner" or "admin"))
-        {
-            return Forbid();
-        }
-
         var companyId = User.GetCompanyId();
         try
         {
