@@ -1,0 +1,25 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Node / frontend
+node_modules/
+dist/
+release/
+*.log
+
+# Tauri (native build output; kept out since it can't build on this machine)
+frontend/web/src-tauri/target/
+
+# Downloaded tooling artifacts, not source
+tools/ngrok/
+
+# Editor/OS
+.vs/
+.vscode/
+*.DS_Store
+
+# Reference images dropped in during design discussions, not app assets
+picture app.jpg
+Screenshot*.png

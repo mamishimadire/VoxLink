@@ -1,0 +1,1204 @@
+:root {
+  --bg: #0f1222;
+  --surface: #171a30;
+  --border: #2a2e4a;
+  --text: #e8e9f3;
+  --muted: #9498b8;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --danger: #ef4444;
+  --success: #22c55e;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+h1,
+h2 {
+  margin: 0 0 8px;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* Auth pages (login/register/forgot/reset) intentionally break from the
+   app's dark theme: a light split-panel layout, form on white, brand
+   illustration on a light gradient — the rest of the app stays dark. */
+/* Dark navy, same family as the softphone shell — matches the VOYCE
+   reference's login screen rather than the rest of this stylesheet. */
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  background: #0e0d16;
+}
+
+.auth-form-pane {
+  flex: 1 1 480px;
+  max-width: 540px;
+  background: #0e0d16;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px;
+}
+
+.auth-form-inner {
+  width: 100%;
+  max-width: 380px;
+}
+
+.auth-form-inner form,
+.auth-form-inner > div {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-form-inner h1 {
+  color: #fff;
+}
+
+.auth-form-inner .subtitle,
+.auth-form-inner .hint {
+  color: #8b899e;
+}
+
+.auth-form-inner label {
+  color: #c9c7d6;
+}
+
+.auth-form-inner input,
+.auth-form-inner select {
+  background: #1b1a29;
+  border: 1px solid #2a2840;
+  color: #fff;
+}
+
+.auth-form-inner input:focus,
+.auth-form-inner select:focus {
+  outline: 2px solid var(--accent);
+}
+
+.auth-form-inner .links a {
+  color: #a29bf0;
+}
+
+.auth-form-inner .error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.auth-illustration-pane {
+  flex: 1.2;
+  background: #0e0d16;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-illustration-pane::before,
+.auth-illustration-pane::after {
+  content: "";
+  position: absolute;
+  left: -10%;
+  bottom: -30%;
+  width: 700px;
+  height: 700px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auth-illustration-pane::after {
+  width: 900px;
+  height: 900px;
+  left: -20%;
+  bottom: -45%;
+}
+
+@media (max-width: 900px) {
+  .auth-illustration-pane {
+    display: none;
+  }
+  .auth-form-pane {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+}
+
+.auth-mock-scene {
+  position: relative;
+  width: 460px;
+  height: 320px;
+}
+
+.auth-mock-laptop {
+  position: absolute;
+  left: 0;
+  top: 20px;
+  width: 400px;
+  height: 260px;
+  background: #1c1b2a;
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 30px 60px -20px rgba(40, 40, 90, 0.35);
+}
+
+.auth-mock-laptop-screen {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+}
+
+.auth-mock-laptop-sidebar {
+  width: 40%;
+  background: #f4f4fa;
+  padding: 14px 12px;
+  border-right: 1px solid #e7e7f0;
+}
+
+.auth-mock-laptop-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #16161f;
+  margin-bottom: 10px;
+}
+
+.auth-mock-call-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.auth-mock-call-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.auth-mock-call-lines {
+  flex: 1;
+  min-width: 0;
+}
+
+.auth-mock-call-name {
+  height: 6px;
+  background: #d7d7e6;
+  border-radius: 3px;
+  margin-bottom: 4px;
+}
+
+.auth-mock-call-sub {
+  height: 5px;
+  width: 40%;
+  background: #ececf4;
+  border-radius: 3px;
+}
+
+.auth-mock-laptop-main {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-mock-dialpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.auth-mock-dialpad div {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f4f4fa;
+  border: 1px solid #e7e7f0;
+}
+
+.auth-mock-phone {
+  position: absolute;
+  right: 0;
+  bottom: -10px;
+  width: 140px;
+  height: 290px;
+  background: #16151f;
+  border-radius: 26px;
+  padding: 8px;
+  box-shadow: 0 30px 60px -20px rgba(40, 40, 90, 0.45);
+}
+
+.auth-mock-phone-screen {
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--accent) 0%, #4338ca 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 12px;
+  color: white;
+}
+
+.auth-mock-phone-label {
+  font-size: 10px;
+  opacity: 0.85;
+  text-align: center;
+}
+
+.auth-mock-phone-name {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 6px;
+  text-align: center;
+}
+
+.auth-mock-phone-actions {
+  display: flex;
+  gap: 24px;
+}
+
+.auth-mock-phone-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.auth-mock-phone-btn.accept {
+  background: #22c55e;
+}
+
+.auth-mock-phone-btn.decline {
+  background: #ef4444;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inline-card {
+  max-width: 560px;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin: -8px 0 8px;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+}
+
+.row > label {
+  min-width: 0;
+}
+
+input,
+select {
+  width: 100%;
+  background: #0f1222;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+}
+
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.link-btn {
+  background: none;
+  color: var(--accent);
+  padding: 2px 0;
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.link-btn:hover {
+  background: none;
+  color: var(--accent-hover);
+}
+
+.links {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.links a {
+  color: var(--accent);
+}
+
+.error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.success {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #86efac;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.dashboard {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tab {
+  background: none;
+  color: var(--muted);
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+
+.tab:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.tab.active {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px;
+  width: 100%;
+}
+
+.content-full {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.content-full .softphone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid var(--sp-border, #211f30);
+}
+
+.content-full .softphone-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 32px;
+  font-size: 14px;
+}
+
+.table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.badge-active {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+}
+
+.badge-suspended {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.badge-invited {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5a6f6;
+}
+
+.badge-pending {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fde047;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.col-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dialpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.dialpad-key {
+  background: #242235;
+  border: none;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.dialpad-key-sub {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+
+.dialpad-key:hover:not(:disabled) {
+  background: #2e2c44;
+}
+
+/* Softphone (Phone tab) — its own dark app-shell, distinct palette from
+   the rest of the dashboard, modeled on a desktop softphone reference. */
+.softphone {
+  --sp-bg: #13121c;
+  --sp-panel: #1b1a29;
+  --sp-key: #242235;
+  --sp-border: #211f30;
+  --sp-muted: #8b899e;
+  --sp-green: #2ecc71;
+  --sp-red: #e74c3c;
+  background: var(--sp-bg);
+  border: 1px solid var(--sp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  color: #fff;
+  position: relative;
+}
+
+.softphone-topstrip {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--sp-border);
+}
+
+.softphone-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #c9c7d6;
+}
+
+.softphone-toggle {
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  background: #33324a;
+  position: relative;
+  cursor: pointer;
+}
+
+.softphone-toggle.on {
+  background: var(--sp-green);
+}
+
+.softphone-toggle-knob {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: left 0.15s;
+}
+
+.softphone-toggle.on .softphone-toggle-knob {
+  left: 18px;
+}
+
+.softphone-status {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--sp-muted);
+}
+
+.softphone-status-ready {
+  color: var(--sp-green);
+}
+
+.softphone-identity-wrap {
+  position: relative;
+  margin-left: auto;
+}
+
+.softphone-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.softphone-muted-icon {
+  color: var(--sp-muted);
+  cursor: pointer;
+}
+
+.softphone-identity-text {
+  text-align: right;
+}
+
+.softphone-identity-name {
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.softphone-identity-sub {
+  font-size: 10px;
+  color: var(--sp-muted);
+  letter-spacing: 0.4px;
+}
+
+.softphone-avatar-sm {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #2a2840;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sp-muted);
+  flex-shrink: 0;
+}
+
+.softphone-status-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--sp-bg);
+}
+
+.softphone-status-menu {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  background: var(--sp-panel);
+  border: 1px solid #2a2840;
+  border-radius: 10px;
+  padding: 6px;
+  width: 160px;
+  z-index: 10;
+}
+
+.softphone-status-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.softphone-status-menu-item:hover {
+  background: #221f36;
+}
+
+.softphone-status-dot-inline {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.softphone-status-check {
+  margin-left: auto;
+  color: var(--sp-muted);
+}
+
+.softphone-status-menu-divider {
+  border-top: 1px solid #2a2840;
+  margin: 4px 0;
+}
+
+.softphone-status-menu-logout {
+  color: var(--sp-red);
+}
+
+/* Generic modal (logout confirmation, etc.) — used both inside the
+   softphone shell and from the main dashboard chrome, so it's fixed to
+   the viewport rather than relying on a positioned ancestor. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 5, 12, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-card {
+  width: 360px;
+  background: #191826;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #2a2840;
+  color: #fff;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(90deg, #221f36, #191826);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.modal-muted-icon {
+  color: #8b899e;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 36px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.modal-text {
+  font-size: 15px;
+  margin: 20px 0 28px;
+  color: #fff;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.modal-btn-cancel {
+  padding: 10px 24px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid #3a3852;
+  color: #fff;
+  font-size: 13px;
+}
+
+.modal-btn-cancel:hover {
+  background: #221f36;
+}
+
+.modal-btn-confirm {
+  padding: 10px 24px;
+  border-radius: 999px;
+  background: #7f77dd;
+  border: none;
+  color: #13121c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.softphone-modal-btn-confirm:hover {
+  background: #6c63d6;
+}
+
+.softphone-body {
+  display: flex;
+  min-height: 560px;
+}
+
+.softphone-sidebar {
+  width: 96px;
+  border-right: 1px solid var(--sp-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  flex-shrink: 0;
+}
+
+.softphone-sidebar-spacer {
+  flex: 1;
+}
+
+.softphone-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  color: #6f6d82;
+  width: 74px;
+  font-size: 11px;
+}
+
+.softphone-nav-item.active {
+  background: #221f36;
+  color: #fff;
+}
+
+.softphone-nav-item:hover:not(.active) {
+  color: #c9c7d6;
+}
+
+.softphone-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.softphone-keypad-screen {
+  display: flex;
+  height: 100%;
+}
+
+.softphone-dialer-col {
+  width: 380px;
+  border-right: 1px solid var(--sp-border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px;
+  flex-shrink: 0;
+}
+
+.softphone-dialer-header {
+  font-size: 14px;
+  color: #c9c7d6;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.softphone-dialer-card {
+  margin-top: auto;
+  background: var(--sp-panel);
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.softphone-caller-id {
+  font-size: 12px;
+  color: var(--sp-muted);
+}
+
+.softphone-number-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #2a2840;
+  padding-bottom: 10px;
+}
+
+.softphone-number-row-static {
+  font-size: 18px;
+  font-weight: 600;
+  justify-content: center;
+  padding-bottom: 12px;
+}
+
+.softphone-number-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 16px;
+  width: 100%;
+  padding: 0;
+}
+
+.softphone-clear-icon {
+  color: #6f6d82;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.softphone-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.softphone-round-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--sp-key);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sp-muted);
+  border: none;
+  padding: 0;
+}
+
+.softphone-round-btn-call {
+  width: 52px;
+  height: 52px;
+  background: var(--sp-green);
+  color: #0e3d20;
+}
+
+.softphone-round-btn-call:hover:not(:disabled) {
+  background: #27b866;
+}
+
+.softphone-round-btn-hangup {
+  width: 52px;
+  height: 52px;
+  background: var(--sp-red);
+  color: #fff;
+}
+
+.softphone-round-btn-hangup:hover:not(:disabled) {
+  background: #d63c2c;
+}
+
+.softphone-round-btn-active {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.softphone-pill {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--sp-key);
+  font-size: 12px;
+  color: #c9c7d6;
+}
+
+.softphone-stage {
+  flex: 1;
+  padding: 20px 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+.softphone-stage-tabs {
+  display: flex;
+  justify-content: flex-end;
+  gap: 28px;
+  font-size: 13px;
+  color: var(--sp-muted);
+}
+
+.softphone-tab-muted {
+  color: inherit;
+}
+
+.softphone-stage-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.softphone-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: #2a2840;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5c5972;
+  margin-bottom: 20px;
+}
+
+.softphone-stage-number {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.softphone-stage-sub {
+  font-size: 13px;
+  color: var(--sp-muted);
+  margin-top: 6px;
+}
+
+.softphone-recents {
+  padding: 20px 32px;
+}
+
+.softphone-recent-row {
+  display: flex;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--sp-border);
+  cursor: pointer;
+}
+
+.softphone-recent-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.softphone-recent-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #2a2840;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 14px;
+  color: #c9c7d6;
+  flex-shrink: 0;
+}
+
+.softphone-recent-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.softphone-recent-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.softphone-recent-sub {
+  font-size: 12px;
+  color: var(--sp-muted);
+  text-transform: capitalize;
+}
+
+.softphone-recent-direction {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sp-green);
+  font-size: 12px;
+  margin-right: 40px;
+  white-space: nowrap;
+}
+
+.softphone-recent-time {
+  font-size: 12px;
+  color: var(--sp-muted);
+  white-space: nowrap;
+}
+
+.softphone-settings-card {
+  background: var(--sp-panel);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-top: 16px;
+}
+
+.softphone-settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--sp-key);
+}
+
+.softphone-settings-row:last-child {
+  border-bottom: none;
+}
+
+.softphone-settings-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.softphone-settings-sub {
+  font-size: 12px;
+  color: var(--sp-muted);
+  margin-top: 2px;
+}
+
+.softphone-settings-select {
+  background: var(--sp-key);
+  border: 1px solid #2a2840;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  max-width: 220px;
+}
+
+.softphone-add-contact-row {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0 8px;
+}
+
+.softphone-delete-icon {
+  color: var(--sp-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.softphone-delete-icon:hover {
+  color: var(--sp-red);
+}
