@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using VoxLink.Api.Models;
 
 namespace VoxLink.Api.Data;
@@ -13,5 +14,6 @@ namespace VoxLink.Api.Data;
 public interface IVoxLinkDbContext
 {
     DbSet<Invoice> Invoices { get; }
+    DatabaseFacade Database { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

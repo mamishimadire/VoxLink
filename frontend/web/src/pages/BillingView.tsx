@@ -17,15 +17,6 @@ interface Usage {
   currentUserCount: number;
 }
 
-interface Invoice {
-  id: string;
-  amountDue: number;
-  amountPaid: number;
-  status: string;
-  dueDate: string | null;
-  issuedAt: string;
-}
-
 interface Agreement {
   signed: boolean;
   agreement: { agreedByName: string; agreedAt: string } | null;
@@ -77,24 +68,22 @@ export function BillingView() {
 
   const [usage, setUsage] = useState<Usage | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [agreement, setAgreement] = useState<Agreement | null>(null);
+  const [isInternal, setIsInternal] = useState(false);
   const [fullName, setFullName] = useState("");
   const [agree, setAgree] = useState(false);
-  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
-    const [usageResult, invoiceResult, agreementResult, analyticsResult] = await Promise.allSettled([
+    const [usageResult, companyResult, agreementResult, analyticsResult] = await Promise.allSettled([
       api.get<Usage>("/api/billing/usage", token),
-      api.get<Invoice[]>("/api/billing/invoices", token),
+      api.get<{ isInternal: boolean }>("/api/companies/me", token),
       api.get<Agreement>("/api/billing/agreement", token),
       api.get<Analytics>("/api/billing/analytics", token),
     ]);
     if (usageResult.status === "fulfilled") setUsage(usageResult.value);
-    if (invoiceResult.status === "fulfilled") setInvoices(invoiceResult.value);
+    if (companyResult.status === "fulfilled") setIsInternal(companyResult.value.isInternal);
     if (agreementResult.status === "fulfilled") setAgreement(agreementResult.value);
     if (analyticsResult.status === "fulfilled") setAnalytics(analyticsResult.value);
   }
@@ -112,28 +101,6 @@ export function BillingView() {
       await refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to sign agreement.");
-    }
-  }
-
-  async function handleDownloadInvoice(id: string) {
-    const res = await api.get<{ url: string }>(`/api/billing/invoices/${id}/pdf`, token);
-    window.open(res.url, "_blank");
-  }
-
-  async function handleUploadProof(invoiceId: string) {
-    if (!file) return;
-    setError(null);
-    setMessage(null);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await api.postForm<{ message: string }>(`/api/billing/invoices/${invoiceId}/proof`, form, token);
-      setMessage(res.message);
-      setUploadingFor(null);
-      setFile(null);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to upload proof of payment.");
     }
   }
 
@@ -239,94 +206,34 @@ export function BillingView() {
         </>
       )}
 
-      <h2>Agreement</h2>
-      {agreement?.signed ? (
-        <div className="card inline-card">
-          <p className="success" style={{ margin: 0 }}>
-            Signed by {agreement.agreement?.agreedByName} on {agreement.agreement?.agreedAt.slice(0, 10)}
-          </p>
-        </div>
-      ) : canManage ? (
-        <div className="card inline-card">
-          <p className="hint">You need to sign the pay-as-you-go services agreement.</p>
-          <label>
-            Full name
-            <input value={fullName} onChange={(e) => setFullName(e.target.value)} />
-          </label>
-          <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ width: "auto" }} />
-            I agree to the terms
-          </label>
-          <button type="button" disabled={!fullName || !agree} onClick={handleSignAgreement}>
-            Sign agreement
-          </button>
-        </div>
-      ) : (
-        <p className="hint">Not yet signed — ask your company admin to sign it.</p>
-      )}
-
-      <h2>Invoices</h2>
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Issued</th>
-            <th>Amount</th>
-            <th>Paid</th>
-            <th>Status</th>
-            <th>Due</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {invoices.map((inv) => (
-            <tr key={inv.id}>
-              <td>{inv.issuedAt.slice(0, 10)}</td>
-              <td>R{inv.amountDue.toFixed(2)}</td>
-              <td>R{inv.amountPaid.toFixed(2)}</td>
-              <td>
-                <span className={`badge badge-${inv.status === "paid" ? "active" : inv.status === "submitted" ? "invited" : "pending"}`}>
-                  {inv.status}
-                </span>
-              </td>
-              <td>{inv.dueDate?.slice(0, 10) ?? "—"}</td>
-              <td className="actions">
-                <button className="link-btn" onClick={() => handleDownloadInvoice(inv.id)}>
-                  Download
-                </button>
-                {canManage && inv.status === "pending" && (
-                  <button className="link-btn" onClick={() => setUploadingFor(inv.id)}>
-                    Upload proof
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-          {invoices.length === 0 && (
-            <tr>
-              <td colSpan={6} className="muted">
-                No invoices yet.
-              </td>
-            </tr>
+      {!isInternal && (
+        <>
+          <h2>Agreement</h2>
+          {agreement?.signed ? (
+            <div className="card inline-card">
+              <p className="success" style={{ margin: 0 }}>
+                Signed by {agreement.agreement?.agreedByName} on {agreement.agreement?.agreedAt.slice(0, 10)}
+              </p>
+            </div>
+          ) : canManage ? (
+            <div className="card inline-card">
+              <p className="hint">You need to sign the pay-as-you-go services agreement.</p>
+              <label>
+                Full name
+                <input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+              </label>
+              <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ width: "auto" }} />
+                I agree to the terms
+              </label>
+              <button type="button" disabled={!fullName || !agree} onClick={handleSignAgreement}>
+                Sign agreement
+              </button>
+            </div>
+          ) : (
+            <p className="hint">Not yet signed — ask your company admin to sign it.</p>
           )}
-        </tbody>
-      </table>
-
-      {uploadingFor && (
-        <div className="card inline-card">
-          <h2>Upload proof of payment</h2>
-          <label>
-            File
-            <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
-          <div className="row">
-            <button type="button" disabled={!file} onClick={() => handleUploadProof(uploadingFor)}>
-              Upload
-            </button>
-            <button type="button" className="link-btn" onClick={() => setUploadingFor(null)}>
-              Cancel
-            </button>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );

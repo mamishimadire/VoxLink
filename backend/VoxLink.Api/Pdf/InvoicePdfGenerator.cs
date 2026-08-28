@@ -10,7 +10,7 @@ public static class InvoicePdfGenerator
 {
     public static byte[] Generate(
         string companyName,
-        Guid invoiceId,
+        string invoiceNumber,
         DateTimeOffset issuedAt,
         DateOnly? dueDate,
         IReadOnlyList<InvoiceLineItem> lineItems,
@@ -28,7 +28,7 @@ public static class InvoicePdfGenerator
                 page.Header().Column(col =>
                 {
                     col.Item().Text("VoxLink").FontSize(20).Bold();
-                    col.Item().Text($"Invoice #{invoiceId.ToString()[..8].ToUpper()}").FontSize(12).FontColor(Colors.Grey.Darken1);
+                    col.Item().Text($"Invoice #{invoiceNumber}").FontSize(12).FontColor(Colors.Grey.Darken1);
                 });
 
                 page.Content().Column(col =>

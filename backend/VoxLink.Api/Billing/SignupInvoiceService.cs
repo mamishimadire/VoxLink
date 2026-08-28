@@ -50,6 +50,7 @@ public class SignupInvoiceService
             signupInvoice = new Invoice
             {
                 Id = Guid.NewGuid(),
+                InvoiceNumber = await InvoiceNumbering.NextAsync(db.Database, now, cancellationToken),
                 CompanyId = company.Id,
                 SubscriptionId = null,
                 AmountDue = plan.MonthlyPrice,
@@ -66,7 +67,7 @@ public class SignupInvoiceService
         }
 
         var pdfBytes = InvoicePdfGenerator.Generate(
-            company.Name, signupInvoice.Id, signupInvoice.IssuedAt, signupInvoice.DueDate,
+            company.Name, signupInvoice.InvoiceNumber, signupInvoice.IssuedAt, signupInvoice.DueDate,
             [new InvoiceLineItem($"{plan.Name} plan — platform fee (sign-up)", plan.MonthlyPrice)],
             plan.MonthlyPrice, _billingOptions);
 

@@ -6,6 +6,7 @@ import { CompanyView } from "./CompanyView";
 import { OnboardingPage } from "./OnboardingPage";
 import { PricingView } from "./PricingView";
 import { BillingView } from "./BillingView";
+import { InvoicesView } from "./InvoicesView";
 import { DialerPage } from "./DialerPage";
 import { ProfilePage } from "./ProfilePage";
 import { LogoutConfirmModal } from "../components/LogoutConfirmModal";
@@ -15,8 +16,8 @@ interface Company {
   isInternal: boolean;
 }
 
-type PlatformTab = "clients" | "pricing" | "internal" | "dialer";
-type ClientTab = "billing" | "team" | "dialer";
+type PlatformTab = "clients" | "pricing" | "internal" | "dialer" | "billing" | "invoices";
+type ClientTab = "billing" | "invoices" | "team" | "dialer";
 
 export function DashboardPage() {
   const { claims, isPlatformAdmin, logout, token } = useAuth();
@@ -59,12 +60,23 @@ export function DashboardPage() {
             <button className={platformTab === "dialer" ? "tab active" : "tab"} onClick={() => setPlatformTab("dialer")}>
               Phone
             </button>
+            <button className={platformTab === "billing" ? "tab active" : "tab"} onClick={() => setPlatformTab("billing")}>
+              Billing
+            </button>
+            <button className={platformTab === "invoices" ? "tab active" : "tab"} onClick={() => setPlatformTab("invoices")}>
+              Invoices
+            </button>
           </nav>
         ) : (
           <nav className="tabs">
             {showBillingTab && (
               <button className={clientTab === "billing" ? "tab active" : "tab"} onClick={() => setClientTab("billing")}>
                 Billing
+              </button>
+            )}
+            {showBillingTab && (
+              <button className={clientTab === "invoices" ? "tab active" : "tab"} onClick={() => setClientTab("invoices")}>
+                Invoices
               </button>
             )}
             <button className={clientTab === "team" ? "tab active" : "tab"} onClick={() => setClientTab("team")}>
@@ -102,11 +114,17 @@ export function DashboardPage() {
             <PricingView />
           ) : platformTab === "dialer" ? (
             <DialerPage />
+          ) : platformTab === "billing" ? (
+            <BillingView />
+          ) : platformTab === "invoices" ? (
+            <InvoicesView />
           ) : (
             <CompanyView />
           )
         ) : showBillingTab && clientTab === "billing" ? (
           <BillingView />
+        ) : showBillingTab && clientTab === "invoices" ? (
+          <InvoicesView />
         ) : clientTab === "dialer" ? (
           <DialerPage />
         ) : (

@@ -49,8 +49,13 @@ public class InvoiceGenerationService
 
         foreach (var subscription in dueSubscriptions)
         {
+            // Keyed on the exact period-end boundary (not just "any invoice
+            // since period start") so an earlier ad-hoc invoice — which only
+            // covers part of the period and moves CurrentPeriodStart forward
+            // without touching CurrentPeriodEnd — never gets mistaken for
+            // the invoice covering the rest of the period through month-end.
             var alreadyInvoiced = await _db.Invoices.AnyAsync(
-                i => i.SubscriptionId == subscription.Id && i.IssuedAt >= subscription.CurrentPeriodStart,
+                i => i.SubscriptionId == subscription.Id && i.PeriodEnd == subscription.CurrentPeriodEnd,
                 cancellationToken);
 
             if (alreadyInvoiced)
@@ -123,59 +128,67 @@ public class InvoiceGenerationService
         subscription.CurrentPeriodEnd = subscription.CurrentPeriodEnd.AddMonths(1);
     }
 
-    private async Task GenerateInvoiceAsync(Subscription subscription, CancellationToken cancellationToken)
+    private Task GenerateInvoiceAsync(Subscription subscription, CancellationToken cancellationToken) =>
+        GenerateInvoiceCoreAsync(subscription.CompanyId, subscription.Id, subscription.Plan!, subscription.CurrentPeriodStart, subscription.CurrentPeriodEnd, cancellationToken);
+
+    /// <summary>
+    /// Lets an owner/admin (client or VoxLink's own internal team) trigger an
+    /// invoice on demand instead of waiting for month-end — covers the
+    /// current subscription's period-to-date usage. Idempotent-safe: it's
+    /// additive, so triggering it more than once in a period just produces
+    /// more than one invoice for that stretch of usage, which is intended
+    /// (any period covered by an ad-hoc invoice is excluded from what the
+    /// next one bills, since it starts counting from the current time).
+    /// </summary>
+    public async Task<Invoice> GenerateAdHocInvoiceAsync(Guid companyId, CancellationToken cancellationToken)
     {
-        var company = await _db.Companies.FirstAsync(c => c.Id == subscription.CompanyId, cancellationToken);
-        var plan = subscription.Plan!;
+        var subscription = await _db.Subscriptions
+            .Include(s => s.Plan)
+            .Where(s => s.CompanyId == companyId)
+            .OrderByDescending(s => s.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("No plan/subscription to bill against yet.");
+
+        var periodEnd = DateTimeOffset.UtcNow;
+        var invoice = await GenerateInvoiceCoreAsync(
+            companyId, subscription.Id, subscription.Plan!, subscription.CurrentPeriodStart, periodEnd, cancellationToken);
+
+        // The next auto/ad-hoc invoice should only bill usage from here on.
+        subscription.CurrentPeriodStart = periodEnd;
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return invoice;
+    }
+
+    private async Task<Invoice> GenerateInvoiceCoreAsync(
+        Guid companyId, Guid subscriptionId, Plan plan, DateTimeOffset periodStart, DateTimeOffset periodEnd, CancellationToken cancellationToken)
+    {
+        var company = await _db.Companies.FirstAsync(c => c.Id == companyId, cancellationToken);
 
         var calls = await _db.Calls
-            .Where(c => c.CompanyId == company.Id
-                && c.CreatedAt >= subscription.CurrentPeriodStart
-                && c.CreatedAt < subscription.CurrentPeriodEnd)
-            .Select(c => new { c.DestinationNumber, c.DurationSeconds })
+            .Where(c => c.CompanyId == company.Id && c.CreatedAt >= periodStart && c.CreatedAt < periodEnd)
+            .Select(c => new CallUsageRow(c.DestinationNumber, c.DurationSeconds))
             .ToListAsync(cancellationToken);
 
-        var localCalls = calls.Where(c => CallClassifier.IsLocal(c.DestinationNumber, _billingOptions.LocalCountryCode)).ToList();
-        var internationalCalls = calls.Except(localCalls).ToList();
-
-        var localMinutes = Math.Ceiling(localCalls.Sum(c => c.DurationSeconds) / 60m);
-        var internationalMinutes = Math.Ceiling(internationalCalls.Sum(c => c.DurationSeconds) / 60m);
-
-        // Included minutes only ever pool local usage — international calls
-        // are billed from the first minute, never covered by the plan.
-        var localOverageMinutes = Math.Max(0, localMinutes - plan.IncludedMinutes);
-        var localOverageAmount = localOverageMinutes * plan.LocalRatePerMin;
-        var internationalAmount = internationalMinutes * plan.InternationalRatePerMin;
-        var amountDue = plan.MonthlyPrice + localOverageAmount + internationalAmount;
-
-        var lineItems = new List<InvoiceLineItem>
-        {
-            new($"{plan.Name} plan — base fee ({plan.IncludedMinutes} local min included)", plan.MonthlyPrice)
-        };
-        if (localOverageMinutes > 0)
-        {
-            lineItems.Add(new($"Local usage overage — {localOverageMinutes} min @ R{plan.LocalRatePerMin:0.00}/min", localOverageAmount));
-        }
-        if (internationalMinutes > 0)
-        {
-            lineItems.Add(new($"International usage — {internationalMinutes} min @ R{plan.InternationalRatePerMin:0.00}/min", internationalAmount));
-        }
+        var usage = UsageCalculator.Compute(calls, plan, _billingOptions.LocalCountryCode);
 
         var now = DateTimeOffset.UtcNow;
         var invoice = new Invoice
         {
             Id = Guid.NewGuid(),
+            InvoiceNumber = await InvoiceNumbering.NextAsync(_db.Database, now, cancellationToken),
             CompanyId = company.Id,
-            SubscriptionId = subscription.Id,
-            AmountDue = amountDue,
+            SubscriptionId = subscriptionId,
+            AmountDue = usage.AmountDue,
             AmountPaid = 0,
             Status = "pending",
+            PeriodEnd = periodEnd,
             DueDate = DateOnly.FromDateTime((now + TimeSpan.FromDays(7)).UtcDateTime),
             IssuedAt = now
         };
 
         var pdfBytes = InvoicePdfGenerator.Generate(
-            company.Name, invoice.Id, invoice.IssuedAt, invoice.DueDate, lineItems, amountDue, _billingOptions);
+            company.Name, invoice.InvoiceNumber, invoice.IssuedAt, invoice.DueDate, usage.LineItems, usage.AmountDue, _billingOptions);
 
         var storagePath = $"invoices/{company.Id}/{invoice.Id}.pdf";
         try
@@ -197,15 +210,17 @@ public class InvoiceGenerationService
             {
                 var html = $"""
                     <p>Hi,</p>
-                    <p>Your VoxLink invoice for {company.Name} is ready: <strong>R {amountDue:0.00}</strong>, due {invoice.DueDate:yyyy-MM-dd}.</p>
+                    <p>Your VoxLink invoice {invoice.InvoiceNumber} for {company.Name} is ready: <strong>R {usage.AmountDue:0.00}</strong>, due {invoice.DueDate:yyyy-MM-dd}.</p>
                     <p>Log in to VoxLink to view the invoice and upload proof of payment once paid.</p>
                     """;
-                await _emailSender.SendAsync(recipient, $"VoxLink invoice — R {amountDue:0.00} due {invoice.DueDate:yyyy-MM-dd}", html, cancellationToken);
+                await _emailSender.SendAsync(recipient, $"VoxLink invoice {invoice.InvoiceNumber} — R {usage.AmountDue:0.00} due {invoice.DueDate:yyyy-MM-dd}", html, cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to email invoice for company {CompanyId}", company.Id);
             }
         }
+
+        return invoice;
     }
 }

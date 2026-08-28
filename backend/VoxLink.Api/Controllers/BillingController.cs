@@ -44,14 +44,17 @@ public class BillingController : ControllerBase
     private readonly SupabaseStorageClient _storage;
     private readonly BillingOptions _billingOptions;
     private readonly SignupInvoiceService _signupInvoiceService;
+    private readonly InvoiceGenerationService _invoiceGenerationService;
 
     public BillingController(
-        VoxLinkDbContext db, SupabaseStorageClient storage, IOptions<BillingOptions> billingOptions, SignupInvoiceService signupInvoiceService)
+        VoxLinkDbContext db, SupabaseStorageClient storage, IOptions<BillingOptions> billingOptions,
+        SignupInvoiceService signupInvoiceService, InvoiceGenerationService invoiceGenerationService)
     {
         _db = db;
         _storage = storage;
         _billingOptions = billingOptions.Value;
         _signupInvoiceService = signupInvoiceService;
+        _invoiceGenerationService = invoiceGenerationService;
     }
 
     [HttpGet("plans")]
@@ -198,26 +201,15 @@ public class BillingController : ControllerBase
             .Where(c => c.CompanyId == companyId
                 && c.CreatedAt >= subscription.CurrentPeriodStart
                 && c.CreatedAt < subscription.CurrentPeriodEnd)
-            .Select(c => new { c.DestinationNumber, c.DurationSeconds })
+            .Select(c => new CallUsageRow(c.DestinationNumber, c.DurationSeconds))
             .ToListAsync(cancellationToken);
 
         var plan = subscription.Plan!;
-        var localCalls = calls.Where(c => CallClassifier.IsLocal(c.DestinationNumber, _billingOptions.LocalCountryCode)).ToList();
-        var internationalCalls = calls.Except(localCalls).ToList();
-
-        var localMinutes = Math.Ceiling(localCalls.Sum(c => c.DurationSeconds) / 60m);
-        var internationalMinutes = Math.Ceiling(internationalCalls.Sum(c => c.DurationSeconds) / 60m);
-
-        // Included minutes only ever pool local usage — international calls
-        // are billed from the first minute, never covered by the plan.
-        var localOverageMinutes = Math.Max(0, localMinutes - plan.IncludedMinutes);
-        var estimatedAmount = plan.MonthlyPrice
-            + localOverageMinutes * plan.LocalRatePerMin
-            + internationalMinutes * plan.InternationalRatePerMin;
+        var usage = UsageCalculator.Compute(calls, plan, _billingOptions.LocalCountryCode);
 
         return Ok(new UsageResponse(
-            plan.Name, plan.IncludedMinutes, localMinutes, internationalMinutes,
-            plan.LocalRatePerMin, plan.InternationalRatePerMin, calls.Count, estimatedAmount,
+            plan.Name, plan.IncludedMinutes, usage.LocalMinutes, usage.InternationalMinutes,
+            plan.LocalRatePerMin, plan.InternationalRatePerMin, usage.CallCount, usage.AmountDue,
             subscription.CurrentPeriodStart, subscription.CurrentPeriodEnd, plan.MaxUsers, currentUserCount));
     }
 
@@ -275,16 +267,70 @@ public class BillingController : ControllerBase
     }
 
     [HttpGet("invoices")]
-    public async Task<IActionResult> GetInvoices(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetInvoices(
+        [FromQuery] string? number, [FromQuery] string? status,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] int? year,
+        CancellationToken cancellationToken)
     {
         var companyId = User.GetCompanyId();
-        var invoices = await _db.Invoices
-            .Where(i => i.CompanyId == companyId)
+        var query = _db.Invoices.Where(i => i.CompanyId == companyId);
+
+        if (!string.IsNullOrWhiteSpace(number))
+        {
+            query = query.Where(i => EF.Functions.ILike(i.InvoiceNumber, $"%{number.Trim()}%"));
+        }
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query = query.Where(i => i.Status == status);
+        }
+        if (year is int y)
+        {
+            query = query.Where(i => i.IssuedAt.Year == y);
+        }
+        if (from is DateOnly f)
+        {
+            var fromUtc = new DateTimeOffset(f.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            query = query.Where(i => i.IssuedAt >= fromUtc);
+        }
+        if (to is DateOnly t)
+        {
+            var toUtc = new DateTimeOffset(t.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            query = query.Where(i => i.IssuedAt < toUtc);
+        }
+
+        var invoices = await query
             .OrderByDescending(i => i.IssuedAt)
-            .Select(i => new { i.Id, i.AmountDue, i.AmountPaid, i.Status, i.DueDate, i.IssuedAt })
+            .Select(i => new { i.Id, i.InvoiceNumber, i.AmountDue, i.AmountPaid, i.Status, i.DueDate, i.IssuedAt })
             .ToListAsync(cancellationToken);
 
         return Ok(invoices);
+    }
+
+    /// <summary>
+    /// Owner/admin-triggered invoice covering usage from the current
+    /// subscription period's start through now — for a client that wants an
+    /// early invoice, or for VoxLink's own internal team checking what their
+    /// call usage is costing them without waiting for month-end.
+    /// </summary>
+    [HttpPost("invoices/generate")]
+    public async Task<IActionResult> GenerateInvoice(CancellationToken cancellationToken)
+    {
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole is not ("owner" or "admin"))
+        {
+            return Forbid();
+        }
+
+        var companyId = User.GetCompanyId();
+        try
+        {
+            var invoice = await _invoiceGenerationService.GenerateAdHocInvoiceAsync(companyId, cancellationToken);
+            return Ok(new { message = $"Invoice {invoice.InvoiceNumber} generated for R{invoice.AmountDue:0.00}.", invoice.Id, invoice.InvoiceNumber });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpGet("invoices/{id:guid}/pdf")]
