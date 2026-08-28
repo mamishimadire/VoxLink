@@ -331,11 +331,14 @@ public class PlatformController : ControllerBase
     [HttpGet("usage")]
     public async Task<IActionResult> GetUsage(CancellationToken cancellationToken)
     {
+        // Each call rounds up to the minute individually before summing —
+        // matches how usage/invoices bill (two 9-second calls are 2 minutes,
+        // not one minute from summing the raw seconds first).
         var callUsage = await _db.Database
             .SqlQuery<CompanyUsageRow>($@"
                 select c.id as company_id, c.name as company_name,
                        count(calls.id) as call_count,
-                       coalesce(sum(calls.duration_seconds), 0) as total_duration_seconds
+                       coalesce(sum(ceil(calls.duration_seconds::numeric / 60)), 0) as total_minutes
                 from companies c
                 left join calls on calls.company_id = c.id
                 group by c.id, c.name
@@ -531,7 +534,7 @@ public class CompanyUsageRow
     public Guid CompanyId { get; set; }
     public string CompanyName { get; set; } = "";
     public int CallCount { get; set; }
-    public long TotalDurationSeconds { get; set; }
+    public decimal TotalMinutes { get; set; }
 }
 
 public class SignupPaymentRow

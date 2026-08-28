@@ -21,7 +21,7 @@ interface UsageRow {
   companyId: string;
   companyName: string;
   callCount: number;
-  totalDurationSeconds: number;
+  totalMinutes: number;
 }
 
 interface Plan {
@@ -271,7 +271,7 @@ export function PlatformAdminView() {
                   {c.maxUsers !== null ? ` / ${c.maxUsers}` : ""}
                 </td>
                 <td>{u?.callCount ?? 0}</td>
-                <td>{u ? Math.round(u.totalDurationSeconds / 60) : 0}</td>
+                <td>{u?.totalMinutes ?? 0}</td>
                 <td className="actions">
                   {c.status === "pending" && (
                     <button className="link-btn" onClick={() => handleApprove(c.id)}>

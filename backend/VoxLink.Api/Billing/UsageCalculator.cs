@@ -25,8 +25,11 @@ public static class UsageCalculator
         var localCalls = calls.Where(c => CallClassifier.IsLocal(c.DestinationNumber, localCountryCode)).ToList();
         var internationalCalls = calls.Except(localCalls).ToList();
 
-        var localMinutes = Math.Ceiling(localCalls.Sum(c => c.DurationSeconds) / 60m);
-        var internationalMinutes = Math.Ceiling(internationalCalls.Sum(c => c.DurationSeconds) / 60m);
+        // Each call is rounded up to the minute individually, then summed —
+        // not summed in seconds first and rounded once. Two 9-second calls
+        // bill as 2 minutes, not 1 (ceil(9/60) + ceil(9/60), not ceil(18/60)).
+        var localMinutes = localCalls.Sum(c => Math.Ceiling(c.DurationSeconds / 60m));
+        var internationalMinutes = internationalCalls.Sum(c => Math.Ceiling(c.DurationSeconds / 60m));
 
         // Included minutes only ever pool local usage — international calls
         // are billed from the first minute, never covered by the plan.

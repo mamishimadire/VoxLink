@@ -245,6 +245,9 @@ public class BillingController : ControllerBase
             .Where(u => userIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}", cancellationToken);
 
+        // Each call rounds up to the minute individually, then those are
+        // summed — matches how usage/invoices bill (two 9-second calls are
+        // 2 minutes, not ceil(18/60) = 1).
         var byUser = calls
             .Where(c => c.UserId is not null)
             .GroupBy(c => c.UserId!.Value)
@@ -252,13 +255,13 @@ public class BillingController : ControllerBase
                 g.Key,
                 userNames.GetValueOrDefault(g.Key, "Unknown"),
                 g.Count(),
-                Math.Ceiling(g.Sum(c => c.DurationSeconds) / 60m)))
+                g.Sum(c => Math.Ceiling(c.DurationSeconds / 60m))))
             .OrderByDescending(r => r.TotalMinutes)
             .ToList();
 
         var byDestination = calls
             .GroupBy(c => c.DestinationNumber)
-            .Select(g => new DestinationUsageRow(g.Key, g.Count(), Math.Ceiling(g.Sum(c => c.DurationSeconds) / 60m)))
+            .Select(g => new DestinationUsageRow(g.Key, g.Count(), g.Sum(c => Math.Ceiling(c.DurationSeconds / 60m))))
             .OrderByDescending(r => r.TotalMinutes)
             .Take(20)
             .ToList();
