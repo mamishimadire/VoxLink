@@ -17,15 +17,26 @@ public class ResendEmailSender : IEmailSender
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
     }
 
-    public async Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken cancellationToken)
+    public async Task SendAsync(
+        string toEmail, string subject, string htmlBody, CancellationToken cancellationToken,
+        IReadOnlyList<EmailAttachment>? attachments = null)
     {
-        var response = await _httpClient.PostAsJsonAsync("emails", new
+        var payload = new Dictionary<string, object?>
         {
-            from = _options.FromEmail,
-            to = new[] { toEmail },
-            subject,
-            html = htmlBody
-        }, cancellationToken);
+            ["from"] = _options.FromEmail,
+            ["to"] = new[] { toEmail },
+            ["subject"] = subject,
+            ["html"] = htmlBody
+        };
+
+        if (attachments is { Count: > 0 })
+        {
+            payload["attachments"] = attachments
+                .Select(a => new { filename = a.FileName, content = Convert.ToBase64String(a.Content) })
+                .ToList();
+        }
+
+        var response = await _httpClient.PostAsJsonAsync("emails", payload, cancellationToken);
 
         response.EnsureSuccessStatusCode();
     }

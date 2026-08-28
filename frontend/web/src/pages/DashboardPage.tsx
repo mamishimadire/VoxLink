@@ -7,6 +7,8 @@ import { OnboardingPage } from "./OnboardingPage";
 import { PricingView } from "./PricingView";
 import { BillingView } from "./BillingView";
 import { InvoicesView } from "./InvoicesView";
+import { AgreementsView } from "./AgreementsView";
+import { RevenueAnalyticsView } from "./RevenueAnalyticsView";
 import { DialerPage } from "./DialerPage";
 import { ProfilePage } from "./ProfilePage";
 import { LogoutConfirmModal } from "../components/LogoutConfirmModal";
@@ -16,7 +18,7 @@ interface Company {
   isInternal: boolean;
 }
 
-type PlatformTab = "clients" | "pricing" | "internal" | "dialer" | "billing" | "invoices";
+type PlatformTab = "clients" | "pricing" | "internal" | "dialer" | "billing" | "invoices" | "agreements" | "analytics";
 type ClientTab = "billing" | "invoices" | "team" | "dialer";
 
 export function DashboardPage() {
@@ -65,6 +67,12 @@ export function DashboardPage() {
             </button>
             <button className={platformTab === "invoices" ? "tab active" : "tab"} onClick={() => setPlatformTab("invoices")}>
               Invoices
+            </button>
+            <button className={platformTab === "agreements" ? "tab active" : "tab"} onClick={() => setPlatformTab("agreements")}>
+              Agreements
+            </button>
+            <button className={platformTab === "analytics" ? "tab active" : "tab"} onClick={() => setPlatformTab("analytics")}>
+              Analytics
             </button>
           </nav>
         ) : (
@@ -118,6 +126,10 @@ export function DashboardPage() {
             <BillingView />
           ) : platformTab === "invoices" ? (
             <InvoicesView />
+          ) : platformTab === "agreements" ? (
+            <AgreementsView />
+          ) : platformTab === "analytics" ? (
+            <RevenueAnalyticsView />
           ) : (
             <CompanyView />
           )

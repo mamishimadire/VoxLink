@@ -11,4 +11,6 @@ public class ServiceAgreement
     public string? IpAddress { get; set; }
     public string PdfStoragePath { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
+
+    public Company? Company { get; set; }
 }

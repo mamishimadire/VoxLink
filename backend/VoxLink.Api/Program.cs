@@ -63,6 +63,7 @@ builder.Services.AddHttpClient<SupabaseStorageClient>();
 builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection(BillingOptions.SectionName));
 builder.Services.AddScoped<InvoiceGenerationService>();
 builder.Services.AddScoped<SignupInvoiceService>();
+builder.Services.AddScoped<AgreementNotificationService>();
 builder.Services.AddHostedService<InvoiceGenerationBackgroundService>();
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();

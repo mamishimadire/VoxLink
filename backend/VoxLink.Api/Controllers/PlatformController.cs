@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using VoxLink.Api.Auth;
 using VoxLink.Api.Billing;
 using VoxLink.Api.Data;
 using VoxLink.Api.Models;
+using VoxLink.Api.Pdf;
 
 namespace VoxLink.Api.Controllers;
 
@@ -38,12 +40,16 @@ public class PlatformController : ControllerBase
     private readonly VoxLinkDbContext _db;
     private readonly PasswordResetService _passwordResetService;
     private readonly InvoiceGenerationService _invoiceGenerationService;
+    private readonly BillingOptions _billingOptions;
 
-    public PlatformController(VoxLinkDbContext db, PasswordResetService passwordResetService, InvoiceGenerationService invoiceGenerationService)
+    public PlatformController(
+        VoxLinkDbContext db, PasswordResetService passwordResetService, InvoiceGenerationService invoiceGenerationService,
+        IOptions<BillingOptions> billingOptions)
     {
         _db = db;
         _passwordResetService = passwordResetService;
         _invoiceGenerationService = invoiceGenerationService;
+        _billingOptions = billingOptions.Value;
     }
 
     [HttpGet("companies")]
@@ -351,6 +357,124 @@ public class PlatformController : ControllerBase
         return Ok(callUsage);
     }
 
+    /// <summary>
+    /// Every client's signed pay-as-you-go agreement, so a platform admin
+    /// can browse and re-download any of them without digging through email.
+    /// </summary>
+    [HttpGet("agreements")]
+    public async Task<IActionResult> GetAgreements(CancellationToken cancellationToken)
+    {
+        var agreements = await _db.ServiceAgreements
+            .Include(a => a.Company)
+            .Where(a => a.Company != null && !a.Company.IsInternal)
+            .OrderByDescending(a => a.AgreedAt)
+            .Select(a => new
+            {
+                a.Id,
+                CompanyName = a.Company!.Name,
+                a.AgreedByName,
+                a.AgreedByEmail,
+                a.AgreedAt,
+                a.TermsVersion
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(agreements);
+    }
+
+    [HttpGet("agreements/{id:guid}/pdf")]
+    public async Task<IActionResult> GetAgreementPdf(Guid id, [FromServices] Storage.SupabaseStorageClient storage, CancellationToken cancellationToken)
+    {
+        var agreement = await _db.ServiceAgreements.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (agreement is null) return NotFound();
+
+        var url = await storage.GetSignedUrlAsync(agreement.PdfStoragePath, 300, cancellationToken);
+        return Ok(new { url });
+    }
+
+    /// <summary>
+    /// Revenue vs. cost, bucketed by month and by year: a client's calls are
+    /// revenue (what VoxLink bills them), VoxLink's own internal team's calls
+    /// are pure cost (nothing gets billed back). Priced using each company's
+    /// current plan rates — a simplification for periods before a rate
+    /// change, same as every other live usage view in the app.
+    /// AtRisk flags a period where internal minutes reached or passed client
+    /// minutes: VoxLink's own team is calling as much as, or more than,
+    /// everyone actually paying for the platform.
+    /// </summary>
+    [HttpGet("analytics/revenue-cost")]
+    public async Task<IActionResult> GetRevenueCostAnalytics(CancellationToken cancellationToken)
+    {
+        var calls = await _db.Calls
+            .Select(c => new { c.CompanyId, c.CreatedAt, c.DestinationNumber, c.DurationSeconds })
+            .ToListAsync(cancellationToken);
+
+        var companies = await _db.Companies.ToDictionaryAsync(c => c.Id, cancellationToken);
+
+        var planByCompany = await _db.Subscriptions
+            .Include(s => s.Plan)
+            .OrderByDescending(s => s.CreatedAt)
+            .ToListAsync(cancellationToken);
+        var latestPlanByCompany = planByCompany
+            .GroupBy(s => s.CompanyId)
+            .ToDictionary(g => g.Key, g => g.First().Plan!);
+
+        var monthly = new Dictionary<(int Year, int Month), PeriodBucket>();
+        var yearly = new Dictionary<int, PeriodBucket>();
+
+        foreach (var companyGroup in calls.GroupBy(c => c.CompanyId))
+        {
+            if (!companies.TryGetValue(companyGroup.Key, out var company)) continue;
+            if (!latestPlanByCompany.TryGetValue(companyGroup.Key, out var plan)) continue;
+
+            foreach (var monthGroup in companyGroup.GroupBy(c => (c.CreatedAt.Year, c.CreatedAt.Month)))
+            {
+                var rows = monthGroup.Select(c => new CallUsageRow(c.DestinationNumber, c.DurationSeconds)).ToList();
+                var usage = UsageCalculator.Compute(rows, plan, _billingOptions.LocalCountryCode);
+                var minutes = usage.LocalMinutes + usage.InternationalMinutes;
+
+                AddToBucket(monthly, monthGroup.Key, company.IsInternal, minutes, usage.AmountDue);
+                AddToBucket(yearly, monthGroup.Key.Year, company.IsInternal, minutes, usage.AmountDue);
+            }
+        }
+
+        var monthlyRows = monthly
+            .OrderBy(kv => kv.Key)
+            .Select(kv => ToRow($"{kv.Key.Year:0000}-{kv.Key.Month:00}", kv.Value))
+            .ToList();
+        var yearlyRows = yearly
+            .OrderBy(kv => kv.Key)
+            .Select(kv => ToRow($"{kv.Key:0000}", kv.Value))
+            .ToList();
+
+        return Ok(new { monthly = monthlyRows, yearly = yearlyRows });
+    }
+
+    private static void AddToBucket<TKey>(Dictionary<TKey, PeriodBucket> buckets, TKey key, bool isInternal, decimal minutes, decimal amount)
+        where TKey : notnull
+    {
+        if (!buckets.TryGetValue(key, out var bucket))
+        {
+            bucket = new PeriodBucket();
+            buckets[key] = bucket;
+        }
+
+        if (isInternal)
+        {
+            bucket.InternalMinutes += minutes;
+            bucket.InternalCost += amount;
+        }
+        else
+        {
+            bucket.ClientMinutes += minutes;
+            bucket.ClientRevenue += amount;
+        }
+    }
+
+    private static PeriodAnalyticsRow ToRow(string label, PeriodBucket bucket) => new(
+        label, bucket.ClientMinutes, bucket.InternalMinutes, bucket.ClientRevenue, bucket.InternalCost,
+        AtRisk: (bucket.ClientMinutes > 0 || bucket.InternalMinutes > 0) && bucket.InternalMinutes >= bucket.ClientMinutes);
+
     [HttpGet("payments/pending")]
     public async Task<IActionResult> GetPendingPayments(CancellationToken cancellationToken)
     {
@@ -539,6 +663,17 @@ public class CompanyUsageRow
     public int CallCount { get; set; }
     public decimal TotalMinutes { get; set; }
 }
+
+public class PeriodBucket
+{
+    public decimal ClientMinutes { get; set; }
+    public decimal InternalMinutes { get; set; }
+    public decimal ClientRevenue { get; set; }
+    public decimal InternalCost { get; set; }
+}
+
+public record PeriodAnalyticsRow(
+    string Label, decimal ClientMinutes, decimal InternalMinutes, decimal ClientRevenue, decimal InternalCost, bool AtRisk);
 
 public class SignupPaymentRow
 {

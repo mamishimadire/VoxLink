@@ -17,15 +17,26 @@ public class SendGridEmailSender : IEmailSender
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
     }
 
-    public async Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken cancellationToken)
+    public async Task SendAsync(
+        string toEmail, string subject, string htmlBody, CancellationToken cancellationToken,
+        IReadOnlyList<EmailAttachment>? attachments = null)
     {
-        var response = await _httpClient.PostAsJsonAsync("mail/send", new
+        var payload = new Dictionary<string, object?>
         {
-            personalizations = new[] { new { to = new[] { new { email = toEmail } } } },
-            from = new { email = _options.FromEmail, name = _options.FromName },
-            subject,
-            content = new[] { new { type = "text/html", value = htmlBody } }
-        }, cancellationToken);
+            ["personalizations"] = new[] { new { to = new[] { new { email = toEmail } } } },
+            ["from"] = new { email = _options.FromEmail, name = _options.FromName },
+            ["subject"] = subject,
+            ["content"] = new[] { new { type = "text/html", value = htmlBody } }
+        };
+
+        if (attachments is { Count: > 0 })
+        {
+            payload["attachments"] = attachments
+                .Select(a => new { content = Convert.ToBase64String(a.Content), filename = a.FileName, type = a.ContentType })
+                .ToList();
+        }
+
+        var response = await _httpClient.PostAsJsonAsync("mail/send", payload, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {

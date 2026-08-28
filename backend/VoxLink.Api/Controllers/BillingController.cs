@@ -45,16 +45,19 @@ public class BillingController : ControllerBase
     private readonly BillingOptions _billingOptions;
     private readonly SignupInvoiceService _signupInvoiceService;
     private readonly InvoiceGenerationService _invoiceGenerationService;
+    private readonly AgreementNotificationService _agreementNotificationService;
 
     public BillingController(
         VoxLinkDbContext db, SupabaseStorageClient storage, IOptions<BillingOptions> billingOptions,
-        SignupInvoiceService signupInvoiceService, InvoiceGenerationService invoiceGenerationService)
+        SignupInvoiceService signupInvoiceService, InvoiceGenerationService invoiceGenerationService,
+        AgreementNotificationService agreementNotificationService)
     {
         _db = db;
         _storage = storage;
         _billingOptions = billingOptions.Value;
         _signupInvoiceService = signupInvoiceService;
         _invoiceGenerationService = invoiceGenerationService;
+        _agreementNotificationService = agreementNotificationService;
     }
 
     [HttpGet("plans")]
@@ -175,6 +178,16 @@ public class BillingController : ControllerBase
             CreatedAt = now
         });
         await _db.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _agreementNotificationService.NotifyAsync(company, request.FullName, email, now, pdfBytes, cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Signing itself already succeeded and is recorded — the internal
+            // notification is best-effort and must not fail the request.
+        }
 
         return Ok(new { message = "Agreement signed." });
     }
