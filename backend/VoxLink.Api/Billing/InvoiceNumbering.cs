@@ -12,7 +12,11 @@ public static class InvoiceNumbering
 {
     public static async Task<string> NextAsync(DatabaseFacade database, DateTimeOffset issuedAt, CancellationToken cancellationToken)
     {
-        var seq = await database.SqlQuery<long>($"select nextval('invoice_number_seq')").SingleAsync(cancellationToken);
+        // EF Core's SqlQuery<T> wraps the raw SQL as `select s."Value" from (...) as s`,
+        // so the inner query's column must be named exactly "Value" (quoted, case-sensitive)
+        // or it fails with "column s.Value does not exist" — nextval()'s own column name
+        // (`nextval`) doesn't match unless explicitly aliased.
+        var seq = await database.SqlQuery<long>($"select nextval('invoice_number_seq') as \"Value\"").SingleAsync(cancellationToken);
         return $"INV-{issuedAt:yyyy}-{seq:D5}";
     }
 }
