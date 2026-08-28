@@ -606,6 +606,8 @@ public class PlatformController : ControllerBase
         if (changeRequest.Status != "pending") return BadRequest(new { message = "This request has already been reviewed." });
 
         var plan = changeRequest.Plan!;
+        var wasLargeTier = plan.Name == "Large";
+
         plan.Name = changeRequest.NewName;
         plan.Description = changeRequest.NewDescription;
         plan.MonthlyPrice = changeRequest.NewMonthlyPrice;
@@ -620,6 +622,22 @@ public class PlatformController : ControllerBase
         changeRequest.ReviewedBy = User.GetUserId();
         changeRequest.ReviewedAt = DateTimeOffset.UtcNow;
         changeRequest.ReviewNote = request.Note;
+
+        // VoxLink's own internal-usage cost tracking is priced at the Large
+        // tier's per-minute rates (the closest proxy to actual carrier cost)
+        // — never its platform fee or included minutes, which is why the
+        // Internal Usage plan keeps those at zero. Keep the rates in sync
+        // whenever the Large tier's rates change, so internal cost stays
+        // accurate in real time without a separate manual update.
+        if (wasLargeTier)
+        {
+            var internalPlan = await _db.Plans.FirstOrDefaultAsync(p => p.Name == "Internal Usage", cancellationToken);
+            if (internalPlan is not null)
+            {
+                internalPlan.LocalRatePerMin = plan.LocalRatePerMin;
+                internalPlan.InternationalRatePerMin = plan.InternationalRatePerMin;
+            }
+        }
 
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(new { message = $"Price change applied to {plan.Name}." });
