@@ -30,6 +30,13 @@ export function DashboardPage() {
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
+  function refreshPhoto() {
+    api
+      .get<{ photoUrl: string | null }>("/api/users/me", token)
+      .then((p) => setPhotoUrl(p.photoUrl))
+      .catch(() => {});
+  }
+
   useEffect(() => {
     api.get<Company>("/api/companies/me", token).then((c) => {
       setCompany(c);
@@ -37,10 +44,7 @@ export function DashboardPage() {
       // own to manage — land them straight on Team instead.
       setClientTab(c.isInternal ? "team" : "billing");
     });
-    api
-      .get<{ photoUrl: string | null }>("/api/users/me", token)
-      .then((p) => setPhotoUrl(p.photoUrl))
-      .catch(() => {});
+    refreshPhoto();
   }, []);
 
   if (!isPlatformAdmin && company?.status === "pending") {
@@ -136,7 +140,12 @@ export function DashboardPage() {
         }
       >
         {showProfile ? (
-          <ProfilePage onBack={() => setShowProfile(false)} />
+          <ProfilePage
+            onBack={() => {
+              setShowProfile(false);
+              refreshPhoto();
+            }}
+          />
         ) : isPlatformAdmin ? (
           platformTab === "clients" ? (
             <PlatformAdminView />
