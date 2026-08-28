@@ -15,7 +15,7 @@ interface Company {
   isInternal: boolean;
 }
 
-type PlatformTab = "clients" | "pricing" | "internal";
+type PlatformTab = "clients" | "pricing" | "internal" | "dialer";
 type ClientTab = "billing" | "team" | "dialer";
 
 export function DashboardPage() {
@@ -56,6 +56,9 @@ export function DashboardPage() {
             <button className={platformTab === "internal" ? "tab active" : "tab"} onClick={() => setPlatformTab("internal")}>
               Internal team
             </button>
+            <button className={platformTab === "dialer" ? "tab active" : "tab"} onClick={() => setPlatformTab("dialer")}>
+              Phone
+            </button>
           </nav>
         ) : (
           <nav className="tabs">
@@ -82,7 +85,14 @@ export function DashboardPage() {
         </div>
       </header>
 
-      <main className={clientTab === "dialer" && !isPlatformAdmin && !showProfile ? "content content-full" : "content"}>
+      <main
+        className={
+          ((isPlatformAdmin && platformTab === "dialer") || (!isPlatformAdmin && clientTab === "dialer")) &&
+          !showProfile
+            ? "content content-full"
+            : "content"
+        }
+      >
         {showProfile ? (
           <ProfilePage onBack={() => setShowProfile(false)} />
         ) : isPlatformAdmin ? (
@@ -90,6 +100,8 @@ export function DashboardPage() {
             <PlatformAdminView />
           ) : platformTab === "pricing" ? (
             <PricingView />
+          ) : platformTab === "dialer" ? (
+            <DialerPage />
           ) : (
             <CompanyView />
           )
