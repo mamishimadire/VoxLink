@@ -20,7 +20,21 @@ public record UsageBreakdown(
 /// </summary>
 public static class UsageCalculator
 {
-    public static UsageBreakdown Compute(IReadOnlyList<CallUsageRow> calls, Plan plan, string localCountryCode)
+    /// <param name="includedMinutesOverride">
+    /// The local-minutes pool still available to this specific invoice —
+    /// defaults to the plan's full included minutes. An invoice generation
+    /// path that already billed part of a period's included-minutes pool on
+    /// an earlier invoice passes the remainder here, so a second invoice for
+    /// the same period doesn't get the full pool again.
+    /// </param>
+    /// <param name="includeMonthlyFee">
+    /// Whether to charge the plan's flat monthly fee on this invoice —
+    /// false when an earlier invoice already billed it for this period, so
+    /// a second ad-hoc invoice in the same period only bills new usage.
+    /// </param>
+    public static UsageBreakdown Compute(
+        IReadOnlyList<CallUsageRow> calls, Plan plan, string localCountryCode,
+        decimal? includedMinutesOverride = null, bool includeMonthlyFee = true)
     {
         var localCalls = calls.Where(c => CallClassifier.IsLocal(c.DestinationNumber, localCountryCode)).ToList();
         var internationalCalls = calls.Except(localCalls).ToList();
@@ -33,15 +47,18 @@ public static class UsageCalculator
 
         // Included minutes only ever pool local usage — international calls
         // are billed from the first minute, never covered by the plan.
-        var localOverageMinutes = Math.Max(0, localMinutes - plan.IncludedMinutes);
+        var includedMinutes = includedMinutesOverride ?? plan.IncludedMinutes;
+        var localOverageMinutes = Math.Max(0, localMinutes - includedMinutes);
         var localOverageAmount = localOverageMinutes * plan.LocalRatePerMin;
         var internationalAmount = internationalMinutes * plan.InternationalRatePerMin;
-        var amountDue = plan.MonthlyPrice + localOverageAmount + internationalAmount;
+        var monthlyFee = includeMonthlyFee ? plan.MonthlyPrice : 0m;
+        var amountDue = monthlyFee + localOverageAmount + internationalAmount;
 
-        var lineItems = new List<InvoiceLineItem>
+        var lineItems = new List<InvoiceLineItem>();
+        if (includeMonthlyFee)
         {
-            new($"{plan.Name} plan — base fee ({plan.IncludedMinutes} local min included)", plan.MonthlyPrice)
-        };
+            lineItems.Add(new($"{plan.Name} plan — base fee ({plan.IncludedMinutes} local min included)", plan.MonthlyPrice));
+        }
         if (localOverageMinutes > 0)
         {
             lineItems.Add(new($"Local usage overage — {localOverageMinutes} min @ R{plan.LocalRatePerMin:0.00}/min", localOverageAmount));

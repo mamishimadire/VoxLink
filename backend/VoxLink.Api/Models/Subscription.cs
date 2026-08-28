@@ -8,6 +8,8 @@ public class Subscription
     public string Status { get; set; } = "active";
     public DateTimeOffset CurrentPeriodStart { get; set; }
     public DateTimeOffset CurrentPeriodEnd { get; set; }
+    public bool CurrentPeriodFeeBilled { get; set; }
+    public decimal CurrentPeriodLocalMinutesBilled { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 
     public Plan? Plan { get; set; }

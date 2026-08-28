@@ -130,26 +130,26 @@ public class InvoiceGenerationService
     {
         subscription.CurrentPeriodStart = subscription.CurrentPeriodEnd;
         subscription.CurrentPeriodEnd = subscription.CurrentPeriodEnd.AddMonths(1);
+        subscription.CurrentPeriodFeeBilled = false;
+        subscription.CurrentPeriodLocalMinutesBilled = 0;
     }
 
     private Task GenerateInvoiceAsync(Subscription subscription, CancellationToken cancellationToken) =>
-        GenerateInvoiceCoreAsync(subscription.CompanyId, subscription.Id, subscription.Plan!, subscription.CurrentPeriodStart, subscription.CurrentPeriodEnd, cancellationToken);
+        GenerateInvoiceCoreAsync(subscription, subscription.CurrentPeriodStart, subscription.CurrentPeriodEnd, cancellationToken);
 
     /// <summary>
-    /// Lets an owner/admin (client or VoxLink's own internal team) trigger an
-    /// invoice on demand instead of waiting for month-end — covers the
-    /// current subscription's period-to-date usage. Idempotent-safe: it's
-    /// additive, so triggering it more than once in a period just produces
-    /// more than one invoice for that stretch of usage, which is intended
-    /// (any period covered by an ad-hoc invoice is excluded from what the
-    /// next one bills, since it starts counting from the current time).
+    /// Lets a platform admin trigger an invoice on demand instead of waiting
+    /// for month-end — covers the current subscription's period-to-date
+    /// usage. Safe to call more than once within the same period: the flat
+    /// monthly fee and included-minutes pool are only ever billed once per
+    /// period (tracked on the subscription), and each invoice only covers
+    /// calls made since the last one, so nothing gets double-billed.
     /// </summary>
     public async Task<Invoice> GenerateAdHocInvoiceAsync(Guid companyId, CancellationToken cancellationToken)
     {
         var subscription = await GetLatestSubscriptionAsync(companyId, cancellationToken);
         var periodEnd = DateTimeOffset.UtcNow;
-        var invoice = await GenerateInvoiceCoreAsync(
-            companyId, subscription.Id, subscription.Plan!, subscription.CurrentPeriodStart, periodEnd, cancellationToken);
+        var invoice = await GenerateInvoiceCoreAsync(subscription, subscription.CurrentPeriodStart, periodEnd, cancellationToken);
 
         // The next auto/ad-hoc invoice should only bill usage from here on.
         subscription.CurrentPeriodStart = periodEnd;
@@ -161,7 +161,9 @@ public class InvoiceGenerationService
     /// <summary>
     /// Computes what an ad-hoc invoice would look like — company, period,
     /// line items, amount due — without creating, storing, or emailing
-    /// anything. Backs the "preview before you commit" step in the UI.
+    /// anything, or marking the fee/included-minutes pool as billed. Backs
+    /// the "preview before you commit" step in the UI; matches exactly what
+    /// GenerateAdHocInvoiceAsync would actually charge if committed right after.
     /// </summary>
     public async Task<InvoicePreview> PreviewAdHocInvoiceAsync(Guid companyId, CancellationToken cancellationToken)
     {
@@ -174,7 +176,7 @@ public class InvoiceGenerationService
             .Select(c => new CallUsageRow(c.DestinationNumber, c.DurationSeconds))
             .ToListAsync(cancellationToken);
 
-        var usage = UsageCalculator.Compute(calls, subscription.Plan!, _billingOptions.LocalCountryCode);
+        var usage = ComputeUsageForPeriod(calls, subscription);
 
         return new InvoicePreview(
             company.Id, company.Name, subscription.CurrentPeriodStart, periodEnd, usage.LineItems, usage.AmountDue);
@@ -188,17 +190,33 @@ public class InvoiceGenerationService
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException("No plan/subscription to bill against yet.");
 
-    private async Task<Invoice> GenerateInvoiceCoreAsync(
-        Guid companyId, Guid subscriptionId, Plan plan, DateTimeOffset periodStart, DateTimeOffset periodEnd, CancellationToken cancellationToken)
+    /// <summary>
+    /// The flat fee and included-minutes pool are only ever billed once per
+    /// period — remaining allowance/fee state lives on the subscription so a
+    /// later invoice in the same period (whether ad-hoc or the eventual
+    /// month-end auto invoice) only bills what's new since the last one.
+    /// </summary>
+    private UsageBreakdown ComputeUsageForPeriod(IReadOnlyList<CallUsageRow> calls, Subscription subscription)
     {
-        var company = await _db.Companies.FirstAsync(c => c.Id == companyId, cancellationToken);
+        var includedMinutesRemaining = Math.Max(0, subscription.Plan!.IncludedMinutes - subscription.CurrentPeriodLocalMinutesBilled);
+        return UsageCalculator.Compute(
+            calls, subscription.Plan, _billingOptions.LocalCountryCode,
+            includedMinutesRemaining, includeMonthlyFee: !subscription.CurrentPeriodFeeBilled);
+    }
+
+    private async Task<Invoice> GenerateInvoiceCoreAsync(
+        Subscription subscription, DateTimeOffset periodStart, DateTimeOffset periodEnd, CancellationToken cancellationToken)
+    {
+        var company = await _db.Companies.FirstAsync(c => c.Id == subscription.CompanyId, cancellationToken);
 
         var calls = await _db.Calls
             .Where(c => c.CompanyId == company.Id && c.CreatedAt >= periodStart && c.CreatedAt < periodEnd)
             .Select(c => new CallUsageRow(c.DestinationNumber, c.DurationSeconds))
             .ToListAsync(cancellationToken);
 
-        var usage = UsageCalculator.Compute(calls, plan, _billingOptions.LocalCountryCode);
+        var usage = ComputeUsageForPeriod(calls, subscription);
+        subscription.CurrentPeriodFeeBilled = true;
+        subscription.CurrentPeriodLocalMinutesBilled += usage.LocalMinutes;
 
         var now = DateTimeOffset.UtcNow;
         var invoice = new Invoice
@@ -206,7 +224,7 @@ public class InvoiceGenerationService
             Id = Guid.NewGuid(),
             InvoiceNumber = await InvoiceNumbering.NextAsync(_db.Database, now, cancellationToken),
             CompanyId = company.Id,
-            SubscriptionId = subscriptionId,
+            SubscriptionId = subscription.Id,
             AmountDue = usage.AmountDue,
             AmountPaid = 0,
             Status = "pending",
