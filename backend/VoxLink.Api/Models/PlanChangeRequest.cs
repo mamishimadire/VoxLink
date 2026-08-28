@@ -9,6 +9,7 @@ public class PlanChangeRequest
     public string NewName { get; set; } = "";
     public string? NewDescription { get; set; }
     public decimal NewMonthlyPrice { get; set; }
+    public int NewIncludedMinutes { get; set; }
     public decimal NewLocalRatePerMin { get; set; }
     public decimal NewInternationalRatePerMin { get; set; }
     public int NewMinUsers { get; set; }

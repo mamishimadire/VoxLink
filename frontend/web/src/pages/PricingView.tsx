@@ -21,6 +21,7 @@ interface ChangeRequest {
   newName: string;
   newDescription: string | null;
   newMonthlyPrice: number;
+  newIncludedMinutes: number;
   newLocalRatePerMin: number;
   newInternationalRatePerMin: number;
   newMinUsers: number;
@@ -35,6 +36,7 @@ const emptyEdit = {
   name: "",
   description: "",
   monthlyPrice: "",
+  includedMinutes: "",
   localRatePerMin: "",
   internationalRatePerMin: "",
   minUsers: "",
@@ -70,6 +72,7 @@ export function PricingView() {
       name: plan.name,
       description: plan.description,
       monthlyPrice: String(plan.monthlyPrice),
+      includedMinutes: String(plan.includedMinutes),
       localRatePerMin: String(plan.localRatePerMin),
       internationalRatePerMin: String(plan.internationalRatePerMin),
       minUsers: String(plan.minUsers),
@@ -89,6 +92,7 @@ export function PricingView() {
           newName: edit.name,
           newDescription: edit.description,
           newMonthlyPrice: Number(edit.monthlyPrice),
+          newIncludedMinutes: Number(edit.includedMinutes),
           newLocalRatePerMin: Number(edit.localRatePerMin),
           newInternationalRatePerMin: Number(edit.internationalRatePerMin),
           newMinUsers: Number(edit.minUsers),
@@ -185,6 +189,15 @@ export function PricingView() {
               <input type="number" value={edit.monthlyPrice} onChange={(e) => setEdit((f) => ({ ...f, monthlyPrice: e.target.value }))} />
             </label>
             <label>
+              Included minutes
+              <input
+                type="number"
+                min="0"
+                value={edit.includedMinutes}
+                onChange={(e) => setEdit((f) => ({ ...f, includedMinutes: e.target.value }))}
+              />
+            </label>
+            <label>
               Local rate (R/min)
               <input
                 type="number"
@@ -248,8 +261,8 @@ export function PricingView() {
             <tr key={r.id}>
               <td>{r.currentPlanName}</td>
               <td>
-                {r.newName} — {r.newIsCustomQuote ? "custom quote" : `R${r.newMonthlyPrice}/mo`}, local R
-                {r.newLocalRatePerMin.toFixed(2)}/min, intl. R{r.newInternationalRatePerMin.toFixed(2)}/min,{" "}
+                {r.newName} — {r.newIsCustomQuote ? "custom quote" : `R${r.newMonthlyPrice}/mo`}, {r.newIncludedMinutes} min
+                included, local R{r.newLocalRatePerMin.toFixed(2)}/min, intl. R{r.newInternationalRatePerMin.toFixed(2)}/min,{" "}
                 {r.newMinUsers}
                 {r.newMaxUsers ? `–${r.newMaxUsers}` : "+"} users
               </td>

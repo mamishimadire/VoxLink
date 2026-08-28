@@ -24,7 +24,8 @@ public record SetLicenseRequest(Guid PlanId, DateTimeOffset ExpiresAt);
 public record RejectCompanyRequest(string Reason);
 
 public record ProposePlanChangeRequest(
-    string NewName, string? NewDescription, decimal NewMonthlyPrice, decimal NewLocalRatePerMin, decimal NewInternationalRatePerMin,
+    string NewName, string? NewDescription, decimal NewMonthlyPrice, int NewIncludedMinutes,
+    decimal NewLocalRatePerMin, decimal NewInternationalRatePerMin,
     int NewMinUsers, int? NewMaxUsers, bool NewIsCustomQuote);
 
 public record ReviewPlanChangeRequest(string? Note);
@@ -420,6 +421,7 @@ public class PlatformController : ControllerBase
                 r.NewName,
                 r.NewDescription,
                 r.NewMonthlyPrice,
+                r.NewIncludedMinutes,
                 r.NewLocalRatePerMin,
                 r.NewInternationalRatePerMin,
                 r.NewMinUsers,
@@ -450,6 +452,7 @@ public class PlatformController : ControllerBase
             NewName = request.NewName,
             NewDescription = request.NewDescription,
             NewMonthlyPrice = request.NewMonthlyPrice,
+            NewIncludedMinutes = request.NewIncludedMinutes,
             NewLocalRatePerMin = request.NewLocalRatePerMin,
             NewInternationalRatePerMin = request.NewInternationalRatePerMin,
             NewMinUsers = request.NewMinUsers,
@@ -476,6 +479,7 @@ public class PlatformController : ControllerBase
         plan.Name = changeRequest.NewName;
         plan.Description = changeRequest.NewDescription;
         plan.MonthlyPrice = changeRequest.NewMonthlyPrice;
+        plan.IncludedMinutes = changeRequest.NewIncludedMinutes;
         plan.LocalRatePerMin = changeRequest.NewLocalRatePerMin;
         plan.InternationalRatePerMin = changeRequest.NewInternationalRatePerMin;
         plan.MinUsers = changeRequest.NewMinUsers;
