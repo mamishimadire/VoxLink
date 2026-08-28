@@ -77,6 +77,42 @@ function formatWhen(iso: string | null) {
   return isToday ? `Today ${time}` : `${date.toLocaleDateString()} ${time}`;
 }
 
+function loadSoundPref(key: string): boolean {
+  return localStorage.getItem(key) !== "0";
+}
+
+// DTMF frequency pairs (ITU-T Q.23) — a short, real dial-pad tone for local
+// keypress feedback, independent of the DTMF signal actually sent to the
+// far end via Call.sendDigits.
+const DTMF_TONES: Record<string, [number, number]> = {
+  "1": [697, 1209], "2": [697, 1336], "3": [697, 1477],
+  "4": [770, 1209], "5": [770, 1336], "6": [770, 1477],
+  "7": [852, 1209], "8": [852, 1336], "9": [852, 1477],
+  "*": [941, 1209], "0": [941, 1336], "#": [941, 1477],
+};
+
+let dialToneAudioContext: AudioContext | null = null;
+
+function playDialTone(digit: string) {
+  const freqs = DTMF_TONES[digit];
+  if (!freqs) return;
+  dialToneAudioContext ??= new AudioContext();
+  const ctx = dialToneAudioContext;
+  const now = ctx.currentTime;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.08, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+  gain.connect(ctx.destination);
+  for (const freq of freqs) {
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    osc.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.12);
+  }
+}
+
 export function DialerPage() {
   const { token, claims, logout } = useAuth();
   const navigate = useNavigate();
@@ -96,6 +132,7 @@ export function DialerPage() {
   const [status, setStatus] = useState<PresenceStatus>("Online");
   const [statusOpen, setStatusOpen] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   const [recents, setRecents] = useState<RecentCall[] | null>(null);
   const [recentsError, setRecentsError] = useState<string | null>(null);
@@ -110,10 +147,31 @@ export function DialerPage() {
   const [selectedInput, setSelectedInput] = useState("");
   const [selectedOutput, setSelectedOutput] = useState("");
 
+  const [ringtoneEnabled, setRingtoneEnabled] = useState(() => loadSoundPref("voxlink_sound_ringtone"));
+  const [alertEnabled, setAlertEnabled] = useState(() => loadSoundPref("voxlink_sound_alert"));
+  const [dialPadToneEnabled, setDialPadToneEnabled] = useState(() => loadSoundPref("voxlink_sound_dialpad"));
+
   function refreshDeviceLists(device: Device) {
     if (!device.audio) return;
     setInputDevices(Array.from(device.audio.availableInputDevices.values()));
     setOutputDevices(Array.from(device.audio.availableOutputDevices.values()));
+  }
+
+  function toggleRingtone(value: boolean) {
+    setRingtoneEnabled(value);
+    localStorage.setItem("voxlink_sound_ringtone", value ? "1" : "0");
+    deviceRef.current?.audio?.incoming(value);
+  }
+
+  function toggleAlert(value: boolean) {
+    setAlertEnabled(value);
+    localStorage.setItem("voxlink_sound_alert", value ? "1" : "0");
+    deviceRef.current?.audio?.disconnect(value);
+  }
+
+  function toggleDialPadTone(value: boolean) {
+    setDialPadToneEnabled(value);
+    localStorage.setItem("voxlink_sound_dialpad", value ? "1" : "0");
   }
 
   useEffect(() => {
@@ -137,6 +195,8 @@ export function DialerPage() {
         deviceRef.current = device;
         refreshDeviceLists(device);
         device.audio?.on("deviceChange", () => refreshDeviceLists(device));
+        device.audio?.incoming(loadSoundPref("voxlink_sound_ringtone"));
+        device.audio?.disconnect(loadSoundPref("voxlink_sound_alert"));
       } catch (err) {
         console.error("Softphone setup failed:", err);
         const detail = err instanceof Error ? err.message : String(err);
@@ -150,6 +210,13 @@ export function DialerPage() {
       deviceRef.current?.destroy();
       deviceRef.current = null;
     };
+  }, [token]);
+
+  useEffect(() => {
+    api
+      .get<{ photoUrl: string | null }>("/api/users/me", token)
+      .then((p) => setPhotoUrl(p.photoUrl))
+      .catch(() => {});
   }, [token]);
 
   useEffect(() => {
@@ -239,6 +306,7 @@ export function DialerPage() {
   }
 
   function pressDigit(digit: string) {
+    if (dialPadToneEnabled) playDialTone(digit);
     if (callState === "in-call" && callRef.current) {
       callRef.current.sendDigits(digit);
     } else if (callState === "idle") {
@@ -311,8 +379,11 @@ export function DialerPage() {
               <div className="softphone-identity-name">{claims?.email ?? "You"}</div>
               <div className="softphone-identity-sub">{ready ? "REGISTERED" : "CONNECTING…"}</div>
             </div>
-            <div className="softphone-avatar-sm">
-              <User size={16} />
+            <div
+              className="softphone-avatar-sm"
+              style={photoUrl ? { backgroundImage: `url(${photoUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+            >
+              {!photoUrl && <User size={16} />}
               <span className="softphone-status-dot" style={{ background: STATUS_COLORS[status] }} />
             </div>
           </div>
@@ -617,6 +688,40 @@ export function DialerPage() {
                   granted (which happens the first time you place a call).
                 </p>
               )}
+
+              <h2>Sound</h2>
+              <div className="softphone-settings-card">
+                <div className="softphone-settings-row">
+                  <div>
+                    <div className="softphone-settings-label">Ringtone</div>
+                    <div className="softphone-settings-sub">{ringtoneEnabled ? "Enabled" : "Disabled"}</div>
+                  </div>
+                  <div className={ringtoneEnabled ? "softphone-toggle on" : "softphone-toggle"} onClick={() => toggleRingtone(!ringtoneEnabled)}>
+                    <div className="softphone-toggle-knob" />
+                  </div>
+                </div>
+                <div className="softphone-settings-row">
+                  <div>
+                    <div className="softphone-settings-label">Alert</div>
+                    <div className="softphone-settings-sub">{alertEnabled ? "Enabled" : "Disabled"}</div>
+                  </div>
+                  <div className={alertEnabled ? "softphone-toggle on" : "softphone-toggle"} onClick={() => toggleAlert(!alertEnabled)}>
+                    <div className="softphone-toggle-knob" />
+                  </div>
+                </div>
+                <div className="softphone-settings-row">
+                  <div>
+                    <div className="softphone-settings-label">Dial Pad Tone</div>
+                    <div className="softphone-settings-sub">{dialPadToneEnabled ? "Enabled" : "Disabled"}</div>
+                  </div>
+                  <div
+                    className={dialPadToneEnabled ? "softphone-toggle on" : "softphone-toggle"}
+                    onClick={() => toggleDialPadTone(!dialPadToneEnabled)}
+                  >
+                    <div className="softphone-toggle-knob" />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

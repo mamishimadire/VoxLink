@@ -397,7 +397,7 @@ public class BillingController : ControllerBase
         using var memoryStream = new MemoryStream();
         await file.CopyToAsync(memoryStream, cancellationToken);
 
-        var storagePath = $"payment-proofs/{companyId}/{invoice.Id}/{Guid.NewGuid()}-{file.FileName}";
+        var storagePath = $"payment-proofs/{companyId}/{invoice.Id}/{Guid.NewGuid()}{StoragePaths.SafeExtension(file.FileName)}";
         await _storage.UploadAsync(storagePath, memoryStream.ToArray(), file.ContentType, cancellationToken);
 
         _db.Payments.Add(new Payment

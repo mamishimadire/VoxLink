@@ -85,7 +85,7 @@ public class UsersController : ControllerBase
         using var memoryStream = new MemoryStream();
         await file.CopyToAsync(memoryStream, cancellationToken);
 
-        var storagePath = $"profile-pictures/{user.Id}/{Guid.NewGuid()}-{file.FileName}";
+        var storagePath = $"profile-pictures/{user.Id}/{Guid.NewGuid()}{StoragePaths.SafeExtension(file.FileName)}";
         await _storage.UploadAsync(storagePath, memoryStream.ToArray(), file.ContentType, cancellationToken);
 
         user.ProfilePicturePath = storagePath;

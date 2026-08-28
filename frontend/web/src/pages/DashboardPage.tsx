@@ -28,6 +28,7 @@ export function DashboardPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     api.get<Company>("/api/companies/me", token).then((c) => {
@@ -36,6 +37,10 @@ export function DashboardPage() {
       // own to manage — land them straight on Team instead.
       setClientTab(c.isInternal ? "team" : "billing");
     });
+    api
+      .get<{ photoUrl: string | null }>("/api/users/me", token)
+      .then((p) => setPhotoUrl(p.photoUrl))
+      .catch(() => {});
   }, []);
 
   if (!isPlatformAdmin && company?.status === "pending") {
@@ -96,7 +101,24 @@ export function DashboardPage() {
           </nav>
         )}
         <div className="topbar-right">
-          <button className="link-btn" onClick={() => setShowProfile(true)}>
+          <button
+            className="link-btn"
+            onClick={() => setShowProfile(true)}
+            style={{ display: "flex", alignItems: "center", gap: 8 }}
+          >
+            <span
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: "50%",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                flexShrink: 0,
+              }}
+            />
             {claims?.email}
           </button>
           <button className="link-btn" onClick={() => setLogoutConfirm(true)}>
