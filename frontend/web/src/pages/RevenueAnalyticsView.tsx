@@ -111,17 +111,39 @@ export function RevenueAnalyticsView() {
   const [data, setData] = useState<RevenueCostAnalytics | null>(null);
   const [view, setView] = useState<View>("monthly");
   const [error, setError] = useState<string | null>(null);
+  const [fromPeriod, setFromPeriod] = useState("");
+  const [toPeriod, setToPeriod] = useState("");
 
   useEffect(() => {
     api
       .get<RevenueCostAnalytics>("/api/platform/analytics/revenue-cost", token)
-      .then(setData)
+      .then((res) => {
+        setData(res);
+        if (res.monthly.length > 0) {
+          setFromPeriod(res.monthly[0].label);
+          setToPeriod(res.monthly[res.monthly.length - 1].label);
+        }
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load analytics."));
   }, []);
 
-  const rows = data ? (view === "monthly" ? data.monthly : data.yearly) : [];
+  const allRows = data ? (view === "monthly" ? data.monthly : data.yearly) : [];
+  const fromYear = fromPeriod.slice(0, 4);
+  const toYear = toPeriod.slice(0, 4);
+  const rows = allRows.filter((r) => {
+    if (view === "monthly") {
+      return (!fromPeriod || r.label >= fromPeriod) && (!toPeriod || r.label <= toPeriod);
+    }
+    return (!fromYear || r.label >= fromYear) && (!toYear || r.label <= toYear);
+  });
   const latest = rows.length > 0 ? rows[rows.length - 1] : null;
   const atRiskCount = rows.filter((r) => r.atRisk).length;
+
+  function resetRange() {
+    if (!data || data.monthly.length === 0) return;
+    setFromPeriod(data.monthly[0].label);
+    setToPeriod(data.monthly[data.monthly.length - 1].label);
+  }
 
   return (
     <div>
@@ -147,14 +169,26 @@ export function RevenueAnalyticsView() {
         </div>
       )}
 
-      <div className="row" style={{ marginBottom: 8 }}>
+      <div className="row" style={{ marginBottom: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
         <button type="button" className={view === "monthly" ? "tab active" : "tab"} onClick={() => setView("monthly")}>
           Monthly
         </button>
         <button type="button" className={view === "yearly" ? "tab active" : "tab"} onClick={() => setView("yearly")}>
           Yearly
         </button>
+        <label style={{ flex: "0 1 170px" }}>
+          From
+          <input type="month" value={fromPeriod} onChange={(e) => setFromPeriod(e.target.value)} />
+        </label>
+        <label style={{ flex: "0 1 170px" }}>
+          To
+          <input type="month" value={toPeriod} onChange={(e) => setToPeriod(e.target.value)} />
+        </label>
+        <button type="button" className="link-btn" onClick={resetRange}>
+          Reset range
+        </button>
       </div>
+      {view === "yearly" && <p className="hint">In yearly view, only the year of each picked date is used.</p>}
 
       <div className="card inline-card">
         <BarChart rows={rows} view={view} />
