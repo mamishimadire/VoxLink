@@ -162,6 +162,11 @@ public class PlatformController : ControllerBase
                 Status = "active",
                 CurrentPeriodStart = now,
                 CurrentPeriodEnd = request.ExpiresAt,
+                // The platform fee for this first period may already have
+                // been paid upfront via the signup invoice before this
+                // license was ever set — don't charge it again on the
+                // subscription's first real invoice if so.
+                CurrentPeriodFeeBilled = await HasPaidSignupInvoiceAsync(companyId, cancellationToken),
                 CreatedAt = now
             };
             _db.Subscriptions.Add(subscription);
@@ -172,6 +177,10 @@ public class PlatformController : ControllerBase
             subscription.Status = "active";
             subscription.CurrentPeriodStart = now;
             subscription.CurrentPeriodEnd = request.ExpiresAt;
+            // A re-license starts a fresh period from now — neither the fee
+            // nor the included-minutes pool has been billed against it yet.
+            subscription.CurrentPeriodFeeBilled = false;
+            subscription.CurrentPeriodLocalMinutesBilled = 0;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -266,6 +275,11 @@ public class PlatformController : ControllerBase
                     Status = "active",
                     CurrentPeriodStart = now,
                     CurrentPeriodEnd = now.AddMonths(1),
+                    // The platform fee for this first period was already
+                    // paid upfront via the signup invoice before approval —
+                    // the subscription's first real invoice must not charge
+                    // it again.
+                    CurrentPeriodFeeBilled = await HasPaidSignupInvoiceAsync(companyId, cancellationToken),
                     CreatedAt = now
                 });
             }
@@ -275,6 +289,16 @@ public class PlatformController : ControllerBase
 
         return Ok(new { message = $"{company.Name} approved and fully activated." });
     }
+
+    /// <summary>
+    /// The upfront "platform fee" invoice created during signup (before a
+    /// subscription exists) is a genuine payment for the first period's flat
+    /// fee — a brand-new subscription must know this so its first real
+    /// invoice doesn't charge that fee a second time.
+    /// </summary>
+    private async Task<bool> HasPaidSignupInvoiceAsync(Guid companyId, CancellationToken cancellationToken) =>
+        await _db.Invoices.AnyAsync(
+            i => i.CompanyId == companyId && i.SubscriptionId == null && i.Status == "paid", cancellationToken);
 
     [HttpPost("companies/{companyId:guid}/reject")]
     public async Task<IActionResult> Reject(Guid companyId, RejectCompanyRequest request, CancellationToken cancellationToken)
