@@ -12,6 +12,7 @@ import { AgreementsView } from "./AgreementsView";
 import { RevenueAnalyticsView } from "./RevenueAnalyticsView";
 import { DialerPage } from "./DialerPage";
 import { ProfilePage } from "./ProfilePage";
+import { AuditLogView } from "./AuditLogView";
 import { LogoutConfirmModal } from "../components/LogoutConfirmModal";
 
 interface Company {
@@ -19,11 +20,20 @@ interface Company {
   isInternal: boolean;
 }
 
-type PlatformTab = "clients" | "pricing" | "internal" | "dialer" | "billing" | "invoices" | "agreements" | "analytics";
-type ClientTab = "billing" | "invoices" | "team" | "dialer";
+type PlatformTab =
+  | "clients"
+  | "pricing"
+  | "internal"
+  | "dialer"
+  | "billing"
+  | "invoices"
+  | "agreements"
+  | "analytics"
+  | "auditlog";
+type ClientTab = "billing" | "invoices" | "team" | "dialer" | "auditlog";
 
 export function DashboardPage() {
-  const { claims, isPlatformAdmin, logout, token } = useAuth();
+  const { claims, role, isPlatformAdmin, logout, token } = useAuth();
   const [platformTab, setPlatformTab] = useState<PlatformTab>("clients");
   const [clientTab, setClientTab] = useState<ClientTab | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
@@ -97,6 +107,11 @@ export function DashboardPage() {
             <button className={platformTab === "analytics" ? "tab active" : "tab"} onClick={() => setPlatformTab("analytics")}>
               Analytics
             </button>
+            {role === "owner" && (
+              <button className={platformTab === "auditlog" ? "tab active" : "tab"} onClick={() => setPlatformTab("auditlog")}>
+                Audit log
+              </button>
+            )}
           </nav>
         ) : (
           <nav className="tabs">
@@ -116,6 +131,11 @@ export function DashboardPage() {
             <button className={clientTab === "dialer" ? "tab active" : "tab"} onClick={() => setClientTab("dialer")}>
               Phone
             </button>
+            {role === "owner" && (
+              <button className={clientTab === "auditlog" ? "tab active" : "tab"} onClick={() => setClientTab("auditlog")}>
+                Audit log
+              </button>
+            )}
           </nav>
         )}
         <div className="topbar-right">
@@ -175,6 +195,8 @@ export function DashboardPage() {
             <AgreementsView />
           ) : platformTab === "analytics" ? (
             <RevenueAnalyticsView />
+          ) : platformTab === "auditlog" ? (
+            <AuditLogView />
           ) : (
             <CompanyView />
           )
@@ -184,6 +206,8 @@ export function DashboardPage() {
           <InvoicesView />
         ) : clientTab === "dialer" ? (
           <DialerPage />
+        ) : clientTab === "auditlog" ? (
+          <AuditLogView />
         ) : (
           <CompanyView />
         )}

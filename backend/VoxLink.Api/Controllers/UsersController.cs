@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using VoxLink.Api.Auditing;
 using VoxLink.Api.Auth;
 using VoxLink.Api.Data;
 using VoxLink.Api.Models;
@@ -197,6 +198,9 @@ public class UsersController : ControllerBase
         };
 
         _db.Users.Add(user);
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "user.created", "user", user.Id,
+            $"Added {user.FirstName} {user.LastName} ({user.Email}) as {user.Role}" +
+            (user.Status == "pending_approval" ? " — awaiting owner approval" : ""));
         await _db.SaveChangesAsync(cancellationToken);
 
         // Sent regardless of approval status: it only lets them set a password,
@@ -239,6 +243,8 @@ public class UsersController : ControllerBase
 
         user.Status = "active";
         user.UpdatedAt = DateTimeOffset.UtcNow;
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "user.approved", "user", user.Id,
+            $"Approved {user.FirstName} {user.LastName} ({user.Email})");
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new { message = "User approved." });
@@ -264,6 +270,8 @@ public class UsersController : ControllerBase
 
         user.Status = "rejected";
         user.UpdatedAt = DateTimeOffset.UtcNow;
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "user.rejected", "user", user.Id,
+            $"Rejected {user.FirstName} {user.LastName} ({user.Email})");
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new { message = "User rejected." });
@@ -282,6 +290,8 @@ public class UsersController : ControllerBase
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == id && u.CompanyId == companyId, cancellationToken);
         if (user is null) return NotFound();
 
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "user.password_reset_issued", "user", user.Id,
+            $"Issued a password reset for {user.FirstName} {user.LastName} ({user.Email})");
         var result = await _passwordResetService.IssueAndSendAsync(_db, user, isNewAccount: false, cancellationToken);
 
         return Ok(new
@@ -318,6 +328,8 @@ public class UsersController : ControllerBase
 
         user.Status = "suspended";
         user.UpdatedAt = DateTimeOffset.UtcNow;
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "user.deactivated", "user", user.Id,
+            $"Deactivated {user.FirstName} {user.LastName} ({user.Email})");
         await _db.SaveChangesAsync(cancellationToken);
 
         return NoContent();

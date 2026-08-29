@@ -20,6 +20,7 @@ public class VoxLinkDbContext : DbContext, IVoxLinkDbContext
     public DbSet<ServiceAgreement> ServiceAgreements => Set<ServiceAgreement>();
     public DbSet<PlanChangeRequest> PlanChangeRequests => Set<PlanChangeRequest>();
     public DbSet<Contact> Contacts => Set<Contact>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) => ConfigureModel(modelBuilder);
 
@@ -40,5 +41,6 @@ public class VoxLinkDbContext : DbContext, IVoxLinkDbContext
         modelBuilder.Entity<ServiceAgreement>().ToTable("service_agreements");
         modelBuilder.Entity<PlanChangeRequest>().ToTable("plan_change_requests");
         modelBuilder.Entity<Contact>().ToTable("contacts");
+        modelBuilder.Entity<AuditLog>().ToTable("audit_logs");
     }
 }

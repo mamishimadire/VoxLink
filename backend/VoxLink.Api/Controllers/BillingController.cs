@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using VoxLink.Api.Auditing;
 using VoxLink.Api.Auth;
 using VoxLink.Api.Billing;
 using VoxLink.Api.Data;
@@ -177,6 +178,8 @@ public class BillingController : ControllerBase
             PdfStoragePath = storagePath,
             CreatedAt = now
         });
+        AuditLogService.Log(_db, companyId, User.GetUserId(), email, "agreement.signed", "company", companyId,
+            $"{request.FullName} signed the service agreement (v{TermsVersion})");
         await _db.SaveChangesAsync(cancellationToken);
 
         try

@@ -38,6 +38,7 @@ public class VoxLinkServiceDbContext : DbContext, IVoxLinkDbContext
     public DbSet<ServiceAgreement> ServiceAgreements => Set<ServiceAgreement>();
     public DbSet<PlanChangeRequest> PlanChangeRequests => Set<PlanChangeRequest>();
     public DbSet<Contact> Contacts => Set<Contact>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) => VoxLinkDbContext.ConfigureModel(modelBuilder);
 }

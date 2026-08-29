@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using VoxLink.Api.Auditing;
 using VoxLink.Api.Auth;
 using VoxLink.Api.Billing;
 using VoxLink.Api.Data;
@@ -183,6 +184,8 @@ public class PlatformController : ControllerBase
             subscription.CurrentPeriodLocalMinutesBilled = 0;
         }
 
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "company.license_set", "company", companyId,
+            $"Set {plan.Name} license for {company.Name}, expires {request.ExpiresAt:yyyy-MM-dd}");
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new { message = $"{plan.Name} license set for {company.Name}, expires {request.ExpiresAt:yyyy-MM-dd}." });
@@ -285,6 +288,8 @@ public class PlatformController : ControllerBase
             }
         }
 
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "company.approved", "company", companyId,
+            $"{company.Name} approved and fully activated");
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new { message = $"{company.Name} approved and fully activated." });
@@ -314,6 +319,8 @@ public class PlatformController : ControllerBase
         company.Status = "rejected";
         company.RejectedReason = request.Reason;
         company.UpdatedAt = DateTimeOffset.UtcNow;
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "company.rejected", "company", companyId,
+            $"{company.Name} rejected: {request.Reason}");
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new { message = $"{company.Name} rejected." });
@@ -623,6 +630,8 @@ public class PlatformController : ControllerBase
         };
 
         _db.PlanChangeRequests.Add(changeRequest);
+        AuditLogService.Log(_db, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "price_change.proposed", "plan", planId,
+            $"Proposed a price change for {plan.Name}: R{request.NewMonthlyPrice}/mo, {request.NewIncludedMinutes} min included");
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new { message = "Price change proposed. Awaiting business owner approval.", changeRequest.Id });
@@ -674,6 +683,8 @@ public class PlatformController : ControllerBase
             }
         }
 
+        AuditLogService.Log(_db, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "price_change.approved", "plan", plan.Id,
+            $"Approved a price change for {plan.Name}: R{plan.MonthlyPrice}/mo, {plan.IncludedMinutes} min included");
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(new { message = $"Price change applied to {plan.Name}." });
     }
@@ -695,6 +706,8 @@ public class PlatformController : ControllerBase
         changeRequest.ReviewedAt = DateTimeOffset.UtcNow;
         changeRequest.ReviewNote = request.Note;
 
+        AuditLogService.Log(_db, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "price_change.rejected", "plan_change_request", changeRequest.Id,
+            $"Rejected a proposed price change ({changeRequest.NewName}): {request.Note}");
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(new { message = "Price change rejected." });
     }
@@ -732,6 +745,9 @@ public class PlatformController : ControllerBase
         try
         {
             var invoice = await _invoiceGenerationService.GenerateAdHocInvoiceAsync(companyId, cancellationToken);
+            AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "invoice.generated", "invoice", invoice.Id,
+                $"Generated invoice {invoice.InvoiceNumber} for R{invoice.AmountDue:0.00}");
+            await _db.SaveChangesAsync(cancellationToken);
             return Ok(new { message = $"Invoice {invoice.InvoiceNumber} generated for R{invoice.AmountDue:0.00}.", invoice.Id, invoice.InvoiceNumber });
         }
         catch (InvalidOperationException ex)
