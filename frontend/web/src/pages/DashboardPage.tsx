@@ -108,13 +108,16 @@ export function DashboardPage() {
         type === "payment_verification" ||
         type === "revoke_approval" ||
         type === "revoke_pending" ||
-        type === "invoice_generation_pending"
+        type === "invoice_generation_pending" ||
+        type === "license_change_approval" ||
+        type === "license_change_pending"
       )
         setPlatformTab("clients");
     } else {
       if (type === "user_approval" || type === "user_approval_pending") setClientTab("team");
       else if (type === "agreement_unsigned") setClientTab("billing");
-      else if (type === "revoke_approval" || type === "invoice_generation_approval") setClientTab("approvals");
+      else if (type === "revoke_approval" || type === "invoice_generation_approval" || type === "license_change_approval")
+        setClientTab("approvals");
     }
   }
 

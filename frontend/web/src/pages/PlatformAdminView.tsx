@@ -50,6 +50,16 @@ interface PendingRevokeRequest {
   proposedAt: string;
 }
 
+interface PendingLicenseChangeRequest {
+  id: string;
+  companyId: string;
+  companyName: string;
+  planName: string;
+  expiresAt: string;
+  proposedByRole: string;
+  proposedAt: string;
+}
+
 const emptyForm = {
   companyName: "",
   phone: "",
@@ -70,6 +80,7 @@ export function PlatformAdminView() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [pendingRevokes, setPendingRevokes] = useState<PendingRevokeRequest[]>([]);
+  const [pendingLicenseChanges, setPendingLicenseChanges] = useState<PendingLicenseChangeRequest[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [licenseFormFor, setLicenseFormFor] = useState<string | null>(null);
   const [licensePlanId, setLicensePlanId] = useState("");
@@ -82,23 +93,31 @@ export function PlatformAdminView() {
   async function refresh() {
     // Each piece loads independently: a hiccup fetching one (e.g. usage)
     // must not blank out data the others already fetched successfully.
-    const [companyResult, usageResult, planResult, pendingPaymentResult, pendingRevokeResult] = await Promise.allSettled([
-      api.get<Company[]>("/api/platform/companies", token),
-      api.get<UsageRow[]>("/api/platform/usage", token),
-      api.get<Plan[]>("/api/platform/plans", token),
-      api.get<PendingPayment[]>("/api/platform/payments/pending", token),
-      api.get<PendingRevokeRequest[]>("/api/platform/revoke-requests", token),
-    ]);
+    const [companyResult, usageResult, planResult, pendingPaymentResult, pendingRevokeResult, pendingLicenseChangeResult] =
+      await Promise.allSettled([
+        api.get<Company[]>("/api/platform/companies", token),
+        api.get<UsageRow[]>("/api/platform/usage", token),
+        api.get<Plan[]>("/api/platform/plans", token),
+        api.get<PendingPayment[]>("/api/platform/payments/pending", token),
+        api.get<PendingRevokeRequest[]>("/api/platform/revoke-requests", token),
+        api.get<PendingLicenseChangeRequest[]>("/api/platform/license-change-requests", token),
+      ]);
 
     if (companyResult.status === "fulfilled") setCompanies(companyResult.value);
     if (usageResult.status === "fulfilled") setUsage(usageResult.value);
     if (planResult.status === "fulfilled") setPlans(planResult.value);
     if (pendingPaymentResult.status === "fulfilled") setPendingPayments(pendingPaymentResult.value);
     if (pendingRevokeResult.status === "fulfilled") setPendingRevokes(pendingRevokeResult.value);
+    if (pendingLicenseChangeResult.status === "fulfilled") setPendingLicenseChanges(pendingLicenseChangeResult.value);
 
-    const failed = [companyResult, usageResult, planResult, pendingPaymentResult, pendingRevokeResult].find(
-      (r) => r.status === "rejected",
-    );
+    const failed = [
+      companyResult,
+      usageResult,
+      planResult,
+      pendingPaymentResult,
+      pendingRevokeResult,
+      pendingLicenseChangeResult,
+    ].find((r) => r.status === "rejected");
     if (failed && failed.status === "rejected") {
       throw failed.reason;
     }
@@ -122,7 +141,11 @@ export function PlatformAdminView() {
   }
 
   function load() {
-    refresh().catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load."));
+    // A prior failed refresh (or action) must not leave a stale error on
+    // screen forever once things start working again.
+    refresh()
+      .then(() => setError(null))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load."));
   }
 
   useEffect(load, []);
@@ -208,6 +231,22 @@ export function PlatformAdminView() {
     }
   }
 
+  async function handleReviewLicenseChange(id: string, approve: boolean) {
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await api.post<{ message: string }>(
+        `/api/approvals/license-change-requests/${id}/${approve ? "approve" : "reject"}`,
+        {},
+        token,
+      );
+      setMessage(res.message);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Action failed.");
+    }
+  }
+
   async function handleResetAdminPassword(companyId: string) {
     setError(null);
     setMessage(null);
@@ -238,7 +277,7 @@ export function PlatformAdminView() {
     setMessage(null);
     try {
       const res = await api.post<{ message: string }>(
-        `/api/platform/companies/${companyId}/license`,
+        `/api/platform/companies/${companyId}/license-request`,
         { planId: licensePlanId, expiresAt: new Date(licenseExpiry).toISOString() },
         token,
       );
@@ -246,7 +285,7 @@ export function PlatformAdminView() {
       setLicenseFormFor(null);
       await refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to set license.");
+      setError(err instanceof ApiError ? err.message : "Failed to submit license change.");
     }
   }
 
@@ -345,9 +384,13 @@ export function PlatformAdminView() {
                   <button className="link-btn" onClick={() => handleResetAdminPassword(c.id)}>
                     Reset admin password
                   </button>
-                  <button className="link-btn" onClick={() => openLicenseForm(c.id)}>
-                    Set license
-                  </button>
+                  {pendingLicenseChanges.some((r) => r.companyId === c.id) ? (
+                    <span className="muted">License change pending review</span>
+                  ) : (
+                    <button className="link-btn" onClick={() => openLicenseForm(c.id)}>
+                      Set license
+                    </button>
+                  )}
                 </td>
               </tr>
             );
@@ -409,6 +452,61 @@ export function PlatformAdminView() {
             <tr>
               <td colSpan={5} className="muted">
                 No pending revoke requests.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      <h2>Pending license change requests</h2>
+      <p className="hint">
+        Same rule as revoking a license: an admin's request needs an owner's approval, and an owner's request needs a
+        manager's approval.
+      </p>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>New tier</th>
+            <th>Expires</th>
+            <th>Requested by</th>
+            <th>Requested</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {pendingLicenseChanges.map((r) => {
+            const canReview = r.proposedByRole === "admin" && isBusinessOwner;
+            return (
+              <tr key={r.id}>
+                <td>{r.companyName}</td>
+                <td>{r.planName}</td>
+                <td>{r.expiresAt.slice(0, 10)}</td>
+                <td style={{ textTransform: "capitalize" }}>{r.proposedByRole}</td>
+                <td>{new Date(r.proposedAt).toLocaleString()}</td>
+                <td className="actions">
+                  {canReview ? (
+                    <>
+                      <button className="link-btn" onClick={() => handleReviewLicenseChange(r.id, true)}>
+                        Approve
+                      </button>
+                      <button className="link-btn" onClick={() => handleReviewLicenseChange(r.id, false)}>
+                        Reject
+                      </button>
+                    </>
+                  ) : r.proposedByRole === "admin" ? (
+                    <span className="muted">Awaiting a business owner</span>
+                  ) : (
+                    <span className="muted">Awaiting a manager</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+          {pendingLicenseChanges.length === 0 && (
+            <tr>
+              <td colSpan={6} className="muted">
+                No pending license change requests.
               </td>
             </tr>
           )}

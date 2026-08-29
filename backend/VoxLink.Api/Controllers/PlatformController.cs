@@ -140,57 +140,76 @@ public class PlatformController : ControllerBase
         return Ok(plans);
     }
 
-    [HttpPost("companies/{companyId:guid}/license")]
-    public async Task<IActionResult> SetLicense(Guid companyId, SetLicenseRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Setting or changing a client's license directly changes what they're
+    /// billed for and how much service they get — neither an admin nor an
+    /// owner may do it unilaterally, same segregation of duties as revoking
+    /// one (see ApprovalsController). This only submits the request.
+    /// </summary>
+    [HttpPost("companies/{companyId:guid}/license-request")]
+    public async Task<IActionResult> ProposeLicenseChange(Guid companyId, SetLicenseRequest request, CancellationToken cancellationToken)
     {
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole is not ("admin" or "owner"))
+        {
+            return Forbid();
+        }
+
         var company = await _db.Companies.FirstOrDefaultAsync(c => c.Id == companyId, cancellationToken);
         if (company is null) return NotFound();
 
         var plan = await _db.Plans.FirstOrDefaultAsync(p => p.Id == request.PlanId, cancellationToken);
         if (plan is null) return NotFound(new { message = "Plan not found." });
 
-        var now = DateTimeOffset.UtcNow;
-        var subscription = await _db.Subscriptions
-            .Where(s => s.CompanyId == companyId)
-            .OrderByDescending(s => s.CreatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (subscription is null)
+        var alreadyPending = await _db.LicenseChangeRequests.AnyAsync(
+            r => r.CompanyId == companyId && r.Status == "pending", cancellationToken);
+        if (alreadyPending)
         {
-            subscription = new Subscription
-            {
-                Id = Guid.NewGuid(),
-                CompanyId = companyId,
-                PlanId = plan.Id,
-                Status = "active",
-                CurrentPeriodStart = now,
-                CurrentPeriodEnd = request.ExpiresAt,
-                // The platform fee for this first period may already have
-                // been paid upfront via the signup invoice before this
-                // license was ever set — don't charge it again on the
-                // subscription's first real invoice if so.
-                CurrentPeriodFeeBilled = await HasPaidSignupInvoiceAsync(companyId, cancellationToken),
-                CreatedAt = now
-            };
-            _db.Subscriptions.Add(subscription);
-        }
-        else
-        {
-            subscription.PlanId = plan.Id;
-            subscription.Status = "active";
-            subscription.CurrentPeriodStart = now;
-            subscription.CurrentPeriodEnd = request.ExpiresAt;
-            // A re-license starts a fresh period from now — neither the fee
-            // nor the included-minutes pool has been billed against it yet.
-            subscription.CurrentPeriodFeeBilled = false;
-            subscription.CurrentPeriodLocalMinutesBilled = 0;
+            return BadRequest(new { message = "A license change request for this company is already pending review." });
         }
 
-        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "company.license_set", "company", companyId,
-            $"Set {plan.Name} license for {company.Name}, expires {request.ExpiresAt:yyyy-MM-dd}");
+        var changeRequest = new LicenseChangeRequest
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            ProposedBy = User.GetUserId(),
+            ProposedByRole = callerRole,
+            PlanId = plan.Id,
+            ExpiresAt = request.ExpiresAt,
+            ProposedAt = DateTimeOffset.UtcNow,
+            Status = "pending"
+        };
+
+        _db.LicenseChangeRequests.Add(changeRequest);
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "license_change.proposed", "company", companyId,
+            $"Proposed setting {company.Name} to {plan.Name}, expires {request.ExpiresAt:yyyy-MM-dd}");
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Ok(new { message = $"{plan.Name} license set for {company.Name}, expires {request.ExpiresAt:yyyy-MM-dd}." });
+        var approverRole = callerRole == "admin" ? "an owner" : "a manager";
+        return Ok(new { message = $"License change request submitted. Awaiting approval from {approverRole}.", changeRequest.Id });
+    }
+
+    [HttpGet("license-change-requests")]
+    public async Task<IActionResult> GetLicenseChangeRequests(CancellationToken cancellationToken)
+    {
+        var requests = await _db.LicenseChangeRequests
+            .Include(r => r.Company)
+            .Include(r => r.Plan)
+            .Where(r => r.Status == "pending")
+            .OrderByDescending(r => r.ProposedAt)
+            .Select(r => new
+            {
+                r.Id,
+                r.CompanyId,
+                CompanyName = r.Company!.Name,
+                PlanName = r.Plan!.Name,
+                r.ExpiresAt,
+                r.ProposedByRole,
+                r.ProposedAt
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(requests);
     }
 
     [HttpPost("companies")]

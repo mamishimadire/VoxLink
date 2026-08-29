@@ -100,6 +100,16 @@ public class NotificationsController : ControllerBase
 
             items.AddRange(pendingRevokesForOwner.Select(r =>
                 new NotificationItem($"revoke:{r.Id}", "revoke_approval", $"A request to revoke {r.CompanyName}'s license is awaiting your approval")));
+
+            var pendingLicenseChangesForOwner = await _db.LicenseChangeRequests
+                .Include(r => r.Company)
+                .Include(r => r.Plan)
+                .Where(r => r.Status == "pending" && r.ProposedByRole == "admin" && r.ProposedBy != userId)
+                .Select(r => new { r.Id, CompanyName = r.Company!.Name, PlanName = r.Plan!.Name })
+                .ToListAsync(cancellationToken);
+
+            items.AddRange(pendingLicenseChangesForOwner.Select(r =>
+                new NotificationItem($"license-change:{r.Id}", "license_change_approval", $"A license change for {r.CompanyName} (to {r.PlanName}) is awaiting your approval")));
         }
 
         if (isPlatformAdmin)
@@ -143,6 +153,19 @@ public class NotificationsController : ControllerBase
 
             items.AddRange(ownPendingInvoiceRequests.Select(r =>
                 new NotificationItem($"invoice-gen-fyi:{r.Id}", "invoice_generation_pending", $"Your invoice generation request for {r.CompanyName} is still awaiting a manager's approval")));
+
+            var ownPendingLicenseChanges = await _db.LicenseChangeRequests
+                .Include(r => r.Company)
+                .Include(r => r.Plan)
+                .Where(r => r.Status == "pending" && r.ProposedBy == userId)
+                .Select(r => new { r.Id, CompanyName = r.Company!.Name, PlanName = r.Plan!.Name, r.ProposedByRole })
+                .ToListAsync(cancellationToken);
+
+            items.AddRange(ownPendingLicenseChanges.Select(r =>
+            {
+                var approver = r.ProposedByRole == "admin" ? "an owner" : "a manager";
+                return new NotificationItem($"license-change-fyi:{r.Id}", "license_change_pending", $"Your license change for {r.CompanyName} (to {r.PlanName}) is still awaiting approval from {approver}");
+            }));
         }
 
         // A manager doesn't carry the platform-admin claim (deliberately —
@@ -172,6 +195,16 @@ public class NotificationsController : ControllerBase
 
                 items.AddRange(pendingInvoiceRequests.Select(r =>
                     new NotificationItem($"invoice-gen:{r.Id}", "invoice_generation_approval", $"An invoice generation request for {r.CompanyName} is awaiting your approval")));
+
+                var pendingLicenseChangesForManager = await _serviceDb.LicenseChangeRequests
+                    .Include(r => r.Company)
+                    .Include(r => r.Plan)
+                    .Where(r => r.Status == "pending" && r.ProposedByRole == "owner")
+                    .Select(r => new { r.Id, CompanyName = r.Company!.Name, PlanName = r.Plan!.Name })
+                    .ToListAsync(cancellationToken);
+
+                items.AddRange(pendingLicenseChangesForManager.Select(r =>
+                    new NotificationItem($"license-change:{r.Id}", "license_change_approval", $"A license change for {r.CompanyName} (to {r.PlanName}) is awaiting your approval")));
             }
         }
 

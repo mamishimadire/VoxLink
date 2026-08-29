@@ -25,7 +25,10 @@ export function AuditLogView() {
   function load() {
     api
       .get<AuditLogEntry[]>("/api/audit-log", token)
-      .then(setEntries)
+      .then((entries) => {
+        setEntries(entries);
+        setError(null);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load audit log."));
   }
 

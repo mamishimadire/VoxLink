@@ -62,7 +62,11 @@ export function CompanyView() {
   const atUserLimit = userLimit?.maxUsers != null && users.length >= userLimit.maxUsers;
 
   function load() {
-    refresh().catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load."));
+    // A prior failed refresh (or action) must not leave a stale error on
+    // screen forever once things start working again.
+    refresh()
+      .then(() => setError(null))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load."));
   }
 
   useEffect(load, []);

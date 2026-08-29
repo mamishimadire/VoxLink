@@ -23,6 +23,7 @@ public class VoxLinkDbContext : DbContext, IVoxLinkDbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<LicenseRevokeRequest> LicenseRevokeRequests => Set<LicenseRevokeRequest>();
     public DbSet<InvoiceGenerationRequest> InvoiceGenerationRequests => Set<InvoiceGenerationRequest>();
+    public DbSet<LicenseChangeRequest> LicenseChangeRequests => Set<LicenseChangeRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) => ConfigureModel(modelBuilder);
 
@@ -46,5 +47,6 @@ public class VoxLinkDbContext : DbContext, IVoxLinkDbContext
         modelBuilder.Entity<AuditLog>().ToTable("audit_logs");
         modelBuilder.Entity<LicenseRevokeRequest>().ToTable("license_revoke_requests");
         modelBuilder.Entity<InvoiceGenerationRequest>().ToTable("invoice_generation_requests");
+        modelBuilder.Entity<LicenseChangeRequest>().ToTable("license_change_requests");
     }
 }
