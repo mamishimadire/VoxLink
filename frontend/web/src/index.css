@@ -894,6 +894,17 @@ button:disabled {
   cursor: pointer;
 }
 
+.logout-header {
+  background: linear-gradient(90deg, #ffe0f4 0%, #ffa0de 45%, #e94db0 70%, #c21b83 100%);
+  border-bottom: none;
+  color: #000000;
+  font-weight: 500;
+}
+
+.close-icon {
+  color: #ffffff;
+}
+
 .modal-body {
   padding: 36px 24px;
   display: flex;

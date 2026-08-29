@@ -4,9 +4,9 @@ export function LogoutConfirmModal({ onCancel, onConfirm }: { onCancel: () => vo
   return (
     <div className="modal-overlay">
       <div className="modal-card">
-        <div className="modal-header">
+        <div className="modal-header logout-header">
           <span>Logout</span>
-          <X size={16} className="modal-muted-icon" onClick={onCancel} />
+          <X size={16} className="modal-muted-icon close-icon" onClick={onCancel} />
         </div>
         <div className="modal-body">
           <Power size={36} color="#c9c7d6" />
