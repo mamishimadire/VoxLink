@@ -38,7 +38,7 @@ function AuthIllustration() {
             <div className="auth-hero-app-body">
               <div className="auth-hero-calls-list">
                 {[
-                  { initials: "AT", time: "00:42", active: true },
+                  { initials: "TM", time: "00:42", active: true },
                   { initials: "MK", time: "09:14", active: false },
                   { initials: "SD", time: "Yesterday", active: false },
                   { initials: "RN", time: "Yesterday", active: false },
@@ -79,9 +79,9 @@ function AuthIllustration() {
             <div className="auth-hero-avatar-wrap">
               <div className="auth-hero-pulse-ring" />
               <div className="auth-hero-pulse-ring r2" />
-              <div className="auth-hero-avatar">AT</div>
+              <div className="auth-hero-avatar">TM</div>
             </div>
-            <div className="auth-hero-caller-name">Alex Turner</div>
+            <div className="auth-hero-caller-name">Tonny Madire</div>
             <div className="auth-hero-caller-sub">Mobile · VoxLink</div>
             <div className="auth-hero-call-actions">
               <div className="auth-hero-call-btn decline" aria-label="Decline call">

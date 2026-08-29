@@ -107,6 +107,11 @@ public class UsersController : ControllerBase
     {
         if (file.Length == 0) return BadRequest(new { message = "No file uploaded." });
 
+        if (!FileValidation.IsAllowedImage(file.FileName, file.ContentType))
+        {
+            return BadRequest(new { message = "Only JPG, PNG, WEBP, or GIF images are allowed." });
+        }
+
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == User.GetUserId(), cancellationToken);
         if (user is null) return NotFound();
 

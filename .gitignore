@@ -23,3 +23,15 @@ tools/ngrok/
 # Reference images dropped in during design discussions, not app assets
 picture app.jpg
 Screenshot*.png
+
+# Secrets — real credentials belong in `dotnet user-secrets` (not committed,
+# stored outside the repo) or a deploy-time environment/secret store, never
+# in a tracked file. This is a safety net, not the primary control: it
+# excludes any secrets.json that lands in the repo (some editors mistakenly
+# create one locally instead of in the user-secrets store) and any .env
+# variant beyond the checked-in frontend/web/.env, which only holds a
+# non-secret local API URL.
+**/secrets.json
+.env
+.env.*
+!frontend/web/.env

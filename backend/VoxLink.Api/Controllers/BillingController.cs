@@ -423,6 +423,11 @@ public class BillingController : ControllerBase
 
         if (file.Length == 0) return BadRequest(new { message = "No file uploaded." });
 
+        if (!FileValidation.IsAllowedProofOfPayment(file.FileName, file.ContentType))
+        {
+            return BadRequest(new { message = "Only JPG, PNG, WEBP images or PDF files are allowed." });
+        }
+
         using var memoryStream = new MemoryStream();
         await file.CopyToAsync(memoryStream, cancellationToken);
 

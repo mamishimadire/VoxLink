@@ -94,10 +94,16 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("is_business_owner", "true"));
 });
 
+// Falls back to the local dev origin only if Cors:AllowedOrigins isn't
+// configured — a production deploy must set its own frontend origin(s)
+// via config rather than a source change.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:5173"];
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(corsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod());
 });
@@ -109,6 +115,31 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+// A pure JSON API has no HTML error page to fall back on — without this, an
+// unhandled exception anywhere risks returning a bare empty response (or,
+// worse, the framework's raw exception details if ever misconfigured for
+// Production). Logs the real exception either way; only echoes its message
+// back to the caller in Development, never in Production.
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (feature?.Error is not null)
+        {
+            context.RequestServices.GetRequiredService<ILogger<Program>>()
+                .LogError(feature.Error, "Unhandled exception");
+        }
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        var message = app.Environment.IsDevelopment() && feature?.Error is not null
+            ? feature.Error.Message
+            : "Something went wrong. Please try again.";
+        await context.Response.WriteAsJsonAsync(new { message });
+    });
+});
 
 app.UseHttpsRedirection();
 
