@@ -35,6 +35,7 @@
   --status-danger-text: #b91c1c;
   --status-info-text: #4338ca;
   --status-warning-text: #a16207;
+  --topbar-gradient: linear-gradient(90deg, #ffe0f4 0%, #ffa2df 45%, #ea62ba 70%, #c21b83 100%);
   color-scheme: light;
 }
 
@@ -463,6 +464,11 @@ button:disabled {
   border-bottom: 1px solid var(--border);
 }
 
+:root[data-theme="light"] .topbar {
+  background: var(--topbar-gradient);
+  border-bottom: none;
+}
+
 .brand {
   font-weight: 700;
   font-size: 18px;
@@ -677,6 +683,11 @@ button:disabled {
   gap: 24px;
   padding: 14px 24px;
   border-bottom: 1px solid var(--sp-border);
+}
+
+:root[data-theme="light"] .softphone-topstrip {
+  background: var(--topbar-gradient);
+  border-bottom: none;
 }
 
 .softphone-toggle-row {
