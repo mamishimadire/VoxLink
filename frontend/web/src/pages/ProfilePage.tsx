@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { applyTheme, watchSystemTheme } from "../theme";
 
 interface Profile {
   id: string;
@@ -47,7 +48,7 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
     setTheme(next);
     // Applied immediately (not just on the profile page) — a per-user
     // preference, not per-device, so it must follow this user everywhere.
-    document.documentElement.setAttribute("data-theme", next);
+    applyTheme(next);
     try {
       await api.put("/api/users/me/theme", { theme: next }, token);
     } catch (err) {
@@ -58,6 +59,11 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     load();
   }, []);
+
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  // Only matters while the saved preference is "system".
+  useEffect(() => watchSystemTheme(() => applyTheme(themeRef.current)), []);
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -132,8 +138,9 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
         <label>
           Theme
           <select value={theme} onChange={(e) => handleThemeChange(e.target.value)}>
-            <option value="dark">Dark</option>
+            <option value="system">Follow system settings</option>
             <option value="light">Light</option>
+            <option value="dark">Dark</option>
           </select>
         </label>
         <p className="hint">Applies only to your own account — other users keep their own theme.</p>

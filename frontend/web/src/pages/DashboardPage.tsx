@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { applyTheme, watchSystemTheme } from "../theme";
 import { PlatformAdminView } from "./PlatformAdminView";
 import { CompanyView } from "./CompanyView";
 import { OnboardingPage } from "./OnboardingPage";
@@ -29,6 +30,7 @@ export function DashboardPage() {
   const [showProfile, setShowProfile] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const themeRef = useRef("dark");
 
   function refreshPhoto() {
     api
@@ -38,10 +40,15 @@ export function DashboardPage() {
         // Per-user theme, not per-device — applied globally here so every
         // page (not just the profile page) reflects the signed-in user's
         // own saved preference.
-        document.documentElement.setAttribute("data-theme", p.theme);
+        themeRef.current = p.theme;
+        applyTheme(p.theme);
       })
       .catch(() => {});
   }
+
+  // Only matters while the saved preference is "system" — re-resolves
+  // light/dark if the OS/browser preference flips while the app is open.
+  useEffect(() => watchSystemTheme(() => applyTheme(themeRef.current)), []);
 
   useEffect(() => {
     api.get<Company>("/api/companies/me", token).then((c) => {

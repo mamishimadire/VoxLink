@@ -23,6 +23,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { LogoutConfirmModal } from "../components/LogoutConfirmModal";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
+import { applyTheme, watchSystemTheme } from "../theme";
 
 type Screen = "keypad" | "recents" | "contacts" | "settings";
 type CallState = "idle" | "connecting" | "in-call" | "ended";
@@ -173,6 +174,8 @@ export function DialerPage() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [theme, setTheme] = useState("dark");
+  const themeRef = useRef("dark");
 
   const [recents, setRecents] = useState<RecentCall[] | null>(null);
   const [recentsError, setRecentsError] = useState<string | null>(null);
@@ -261,10 +264,28 @@ export function DialerPage() {
 
   useEffect(() => {
     api
-      .get<{ photoUrl: string | null }>("/api/users/me", token)
-      .then((p) => setPhotoUrl(p.photoUrl))
+      .get<{ photoUrl: string | null; theme: string }>("/api/users/me", token)
+      .then((p) => {
+        setPhotoUrl(p.photoUrl);
+        setTheme(p.theme);
+        themeRef.current = p.theme;
+      })
       .catch(() => {});
   }, [token]);
+
+  // Only matters while the saved preference is "system".
+  useEffect(() => watchSystemTheme(() => applyTheme(themeRef.current)), []);
+
+  async function changeTheme(next: string) {
+    setTheme(next);
+    themeRef.current = next;
+    applyTheme(next);
+    try {
+      await api.put("/api/users/me/theme", { theme: next }, token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update theme.");
+    }
+  }
 
   useEffect(() => {
     if (callState === "in-call") {
@@ -804,6 +825,21 @@ export function DialerPage() {
 
           {screen === "settings" && (
             <div className="softphone-recents">
+              <h2>Application Settings</h2>
+              <div className="softphone-settings-card">
+                <div className="softphone-settings-row">
+                  <div>
+                    <div className="softphone-settings-label">Theme</div>
+                    <div className="softphone-settings-sub">Applies to your account everywhere, not just here</div>
+                  </div>
+                  <select className="softphone-settings-select" value={theme} onChange={(e) => changeTheme(e.target.value)}>
+                    <option value="system">Follow system settings</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
+              </div>
+
               <h2>Devices</h2>
               <p className="hint">Choose which microphone and speakers the softphone uses for calls.</p>
 

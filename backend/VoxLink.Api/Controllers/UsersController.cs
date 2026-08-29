@@ -85,9 +85,9 @@ public class UsersController : ControllerBase
     [HttpPut("me/theme")]
     public async Task<IActionResult> UpdateTheme(UpdateThemeRequest request, CancellationToken cancellationToken)
     {
-        if (request.Theme is not ("dark" or "light"))
+        if (request.Theme is not ("dark" or "light" or "system"))
         {
-            return BadRequest(new { message = "Theme must be 'dark' or 'light'." });
+            return BadRequest(new { message = "Theme must be 'dark', 'light', or 'system'." });
         }
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == User.GetUserId(), cancellationToken);
