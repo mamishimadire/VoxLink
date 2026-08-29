@@ -9,6 +9,19 @@ export class ApiError extends Error {
   }
 }
 
+// A rejected fetch() (connection refused, DNS failure, offline, CORS block)
+// is a plain TypeError, not an ApiError — every caller in the app already
+// does `err instanceof ApiError ? err.message : "Failed to …"`, so without
+// this, any dead-backend/offline moment surfaces as that generic fallback
+// everywhere instead of a message that actually explains what happened.
+async function fetchOrThrow(input: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new ApiError("Could not reach the VoxLink server. Check your connection and try again.", 0);
+  }
+}
+
 async function request<T>(
   path: string,
   options: { method?: string; body?: unknown; token?: string | null } = {},
@@ -16,7 +29,7 @@ async function request<T>(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchOrThrow(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
@@ -41,7 +54,7 @@ async function postForm<T>(path: string, form: FormData, token?: string | null):
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers, body: form });
+  const response = await fetchOrThrow(`${API_BASE_URL}${path}`, { method: "POST", headers, body: form });
 
   if (!response.ok) {
     let message = response.statusText;
