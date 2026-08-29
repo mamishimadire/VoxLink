@@ -17,10 +17,12 @@ import {
   Trash2,
   Star,
   Volume2,
+  Delete,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { LogoutConfirmModal } from "../components/LogoutConfirmModal";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 
 type Screen = "keypad" | "recents" | "contacts" | "settings";
 type CallState = "idle" | "connecting" | "in-call" | "ended";
@@ -179,6 +181,7 @@ export function DialerPage() {
   const [contactsError, setContactsError] = useState<string | null>(null);
   const [newContactName, setNewContactName] = useState("");
   const [newContactNumber, setNewContactNumber] = useState("");
+  const [contactsFavoritesOnly, setContactsFavoritesOnly] = useState(false);
 
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -301,6 +304,17 @@ export function DialerPage() {
       .catch((err) => setContactsError(err instanceof Error ? err.message : "Failed to load contacts."));
   }
 
+  // A call could land (or a teammate could edit a shared contact) while
+  // this screen is just sitting open — keep it from going stale without a
+  // manual tab switch.
+  useAutoRefresh(() => {
+    if (screen === "recents") loadRecents();
+  }, 10000);
+
+  useAutoRefresh(() => {
+    if (screen === "contacts") loadContacts();
+  }, 15000);
+
   async function addContact() {
     if (!newContactNumber.trim()) return;
     const [firstName, ...rest] = newContactName.trim().split(" ");
@@ -361,7 +375,16 @@ export function DialerPage() {
   function goTo(next: Screen) {
     setScreen(next);
     if (next === "recents") loadRecents();
-    if (next === "contacts") loadContacts();
+    if (next === "contacts") {
+      setContactsFavoritesOnly(false);
+      loadContacts();
+    }
+  }
+
+  function showFavorites() {
+    setContactsFavoritesOnly(true);
+    setScreen("contacts");
+    loadContacts();
   }
 
   function resetAfterCall() {
@@ -384,6 +407,10 @@ export function DialerPage() {
     } else if (callState === "idle") {
       setNumber((n) => n + digit);
     }
+  }
+
+  function backspace() {
+    setNumber((n) => n.slice(0, -1));
   }
 
   async function placeCall(dialNumber?: string) {
@@ -550,7 +577,15 @@ export function DialerPage() {
                         onChange={(e) => setNumber(e.target.value.replace(/[^\d+*#]/g, ""))}
                       />
                       {number && (
-                        <X size={16} className="softphone-clear-icon" onClick={() => setNumber("")} />
+                        <>
+                          <Delete
+                            size={16}
+                            className="softphone-clear-icon"
+                            title="Delete last digit"
+                            onClick={backspace}
+                          />
+                          <X size={16} className="softphone-clear-icon" title="Clear" onClick={() => setNumber("")} />
+                        </>
                       )}
                     </div>
                   ) : (
@@ -618,7 +653,9 @@ export function DialerPage() {
 
               <div className="softphone-stage">
                 <div className="softphone-stage-tabs">
-                  <span className="softphone-tab-muted">Favorites</span>
+                  <span className="softphone-tab-muted" onClick={showFavorites} style={{ cursor: "pointer", color: "var(--text)" }}>
+                    Favorites
+                  </span>
                   <span className="softphone-tab-muted" onClick={() => goTo("recents")} style={{ cursor: "pointer", color: "var(--text)" }}>
                     Recent
                   </span>
@@ -691,33 +728,47 @@ export function DialerPage() {
 
           {screen === "contacts" && (
             <div className="softphone-recents">
-              <h2>Contacts</h2>
+              <h2>{contactsFavoritesOnly ? "Favorites" : "Contacts"}</h2>
+              {contactsFavoritesOnly && (
+                <p className="hint">
+                  Showing favorited contacts only.{" "}
+                  <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => goTo("contacts")}>
+                    Show all contacts
+                  </span>
+                </p>
+              )}
               {contactsError && <div className="error">{contactsError}</div>}
 
-              <div className="softphone-add-contact-row">
-                <input
-                  className="softphone-settings-select"
-                  style={{ flex: 1, maxWidth: "none" }}
-                  placeholder="Name"
-                  value={newContactName}
-                  onChange={(e) => setNewContactName(e.target.value)}
-                />
-                <input
-                  className="softphone-settings-select"
-                  style={{ flex: 1, maxWidth: "none" }}
-                  placeholder="Phone number"
-                  value={newContactNumber}
-                  onChange={(e) => setNewContactNumber(e.target.value.replace(/[^\d+*#]/g, ""))}
-                />
-                <button type="button" onClick={addContact} disabled={!newContactNumber.trim()}>
-                  Add
-                </button>
-              </div>
+              {!contactsFavoritesOnly && (
+                <div className="softphone-add-contact-row">
+                  <input
+                    className="softphone-settings-select"
+                    style={{ flex: 1, maxWidth: "none" }}
+                    placeholder="Name"
+                    value={newContactName}
+                    onChange={(e) => setNewContactName(e.target.value)}
+                  />
+                  <input
+                    className="softphone-settings-select"
+                    style={{ flex: 1, maxWidth: "none" }}
+                    placeholder="Phone number"
+                    value={newContactNumber}
+                    onChange={(e) => setNewContactNumber(e.target.value.replace(/[^\d+*#]/g, ""))}
+                  />
+                  <button type="button" onClick={addContact} disabled={!newContactNumber.trim()}>
+                    Add
+                  </button>
+                </div>
+              )}
 
               {contacts === null && !contactsError && <p className="hint">Loading…</p>}
-              {contacts !== null && contacts.length === 0 && <p className="hint">No contacts yet — add one above.</p>}
+              {contacts !== null && (contactsFavoritesOnly ? contacts.filter((c) => c.isFavorite) : contacts).length === 0 && (
+                <p className="hint">
+                  {contactsFavoritesOnly ? "No favorite contacts yet — star one to see it here." : "No contacts yet — add one above."}
+                </p>
+              )}
               {contacts !== null &&
-                contacts.map((c) => (
+                (contactsFavoritesOnly ? contacts.filter((c) => c.isFavorite) : contacts).map((c) => (
                   <div key={c.id} className="softphone-recent-row">
                     <div className="softphone-recent-avatar" onClick={() => redial(c.phoneNumber)}>
                       {(c.firstName || c.phoneNumber)[0]?.toUpperCase()}
