@@ -608,6 +608,15 @@ public class PlatformController : ControllerBase
     [HttpPost("plans/{planId:guid}/propose-change")]
     public async Task<IActionResult> ProposePlanChange(Guid planId, ProposePlanChangeRequest request, CancellationToken cancellationToken)
     {
+        // Segregation of duties: only an admin proposes a price change, never
+        // the owner — the owner's role here is strictly to approve/reject
+        // someone else's proposal, not to also raise their own.
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole != "admin")
+        {
+            return Forbid();
+        }
+
         var plan = await _db.Plans.FirstOrDefaultAsync(p => p.Id == planId, cancellationToken);
         if (plan is null) return NotFound();
 

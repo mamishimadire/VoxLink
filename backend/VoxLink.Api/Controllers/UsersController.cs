@@ -174,6 +174,16 @@ public class UsersController : ControllerBase
             }
         }
 
+        // VoxLink's own internal team members are platform staff by definition
+        // — an "admin"-role teammate added here must be able to manage clients
+        // and pricing the same as any other platform admin, not just the
+        // original bootstrap account. Client-company teammates never get this
+        // regardless of role.
+        var isInternalCompany = await _db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => c.IsInternal)
+            .FirstOrDefaultAsync(cancellationToken);
+
         // Segregation of duties: an admin can create a teammate, but that
         // account only goes live once a business owner reviews and approves
         // it — the admin cannot activate their own addition. An owner's own
@@ -193,6 +203,7 @@ public class UsersController : ControllerBase
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
             Role = request.Role,
             Status = callerRole == "owner" ? "active" : "pending_approval",
+            IsPlatformAdmin = isInternalCompany && request.Role == "admin",
             CreatedAt = now,
             UpdatedAt = now
         };

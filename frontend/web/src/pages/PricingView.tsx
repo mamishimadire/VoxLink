@@ -46,7 +46,8 @@ const emptyEdit = {
 };
 
 export function PricingView() {
-  const { token, claims, isBusinessOwner } = useAuth();
+  const { token, claims, role, isBusinessOwner } = useAuth();
+  const canPropose = role === "admin";
   const [plans, setPlans] = useState<Plan[]>([]);
   const [requests, setRequests] = useState<ChangeRequest[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -130,7 +131,7 @@ export function PricingView() {
       {message && <div className="success">{message}</div>}
       {error && <div className="error">{error}</div>}
       <p className="hint">
-        Price changes go through approval: any platform admin can propose a change, but only a business owner can
+        Price changes go through approval: only an admin can propose a change, and only a business owner can
         approve it before it takes effect on the live plan. Included minutes only ever pool local usage —
         international calls are billed from the first minute at the international rate.
       </p>
@@ -164,9 +165,13 @@ export function PricingView() {
                 {p.maxUsers ? `–${p.maxUsers}` : "+"}
               </td>
               <td className="actions">
-                <button className="link-btn" onClick={() => startEdit(p)}>
-                  Propose change
-                </button>
+                {canPropose ? (
+                  <button className="link-btn" onClick={() => startEdit(p)}>
+                    Propose change
+                  </button>
+                ) : (
+                  <span className="muted">Only an admin can propose a change</span>
+                )}
               </td>
             </tr>
           ))}
