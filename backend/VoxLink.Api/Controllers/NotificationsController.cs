@@ -85,6 +85,33 @@ public class NotificationsController : ControllerBase
                 new NotificationItem($"payment:{p.Id}", "payment_verification", $"Payment proof from {p.CompanyName} is awaiting verification")));
         }
 
+        // FYI, not actionable: the admin who submitted something has no
+        // authority to approve their own submission, but shouldn't be left
+        // wondering whether it's been seen — same whether it's VoxLink's own
+        // internal team or a client company's.
+        if (role == "admin")
+        {
+            var ownPendingUsers = await _db.Users
+                .Where(u => u.CompanyId == companyId && u.Status == "pending_approval" && u.CreatedBy == userId)
+                .Select(u => new { u.Id, u.FirstName, u.LastName })
+                .ToListAsync(cancellationToken);
+
+            items.AddRange(ownPendingUsers.Select(u =>
+                new NotificationItem($"user-fyi:{u.Id}", "user_approval_pending", $"{u.FirstName} {u.LastName} is still awaiting owner approval")));
+
+            // Only ever populated for VoxLink's own admin — client admins
+            // never propose price changes (that endpoint is platform-admin
+            // only), so this naturally never shows for a client company.
+            var ownPendingChanges = await _db.PlanChangeRequests
+                .Include(r => r.Plan)
+                .Where(r => r.Status == "pending" && r.ProposedBy == userId)
+                .Select(r => new { r.Id, PlanName = r.Plan!.Name })
+                .ToListAsync(cancellationToken);
+
+            items.AddRange(ownPendingChanges.Select(r =>
+                new NotificationItem($"price-fyi:{r.Id}", "price_change_pending", $"Your proposed price change for {r.PlanName} is still awaiting a business owner's review")));
+        }
+
         // The agreement is a client-company obligation, owner/admin only
         // (matches who's allowed to sign it in BillingController).
         if (role is "owner" or "admin")

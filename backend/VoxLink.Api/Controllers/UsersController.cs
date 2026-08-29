@@ -209,6 +209,7 @@ public class UsersController : ControllerBase
             Role = request.Role,
             Status = callerRole == "owner" ? "active" : "pending_approval",
             IsPlatformAdmin = isInternalCompany && request.Role == "admin",
+            CreatedBy = User.GetUserId(),
             CreatedAt = now,
             UpdatedAt = now
         };

@@ -92,11 +92,11 @@ export function DashboardPage() {
   // no ambiguity in practice.
   function handleNotificationNavigate(type: string) {
     if (isPlatformAdmin) {
-      if (type === "user_approval") setPlatformTab("internal");
-      else if (type === "price_change") setPlatformTab("pricing");
+      if (type === "user_approval" || type === "user_approval_pending") setPlatformTab("internal");
+      else if (type === "price_change" || type === "price_change_pending") setPlatformTab("pricing");
       else if (type === "company_approval" || type === "payment_verification") setPlatformTab("clients");
     } else {
-      if (type === "user_approval") setClientTab("team");
+      if (type === "user_approval" || type === "user_approval_pending") setClientTab("team");
       else if (type === "agreement_unsigned") setClientTab("billing");
     }
   }

@@ -24,6 +24,10 @@ public class User
     public string? Gender { get; set; }
     public string? ProfilePicturePath { get; set; }
     public string Theme { get; set; } = "dark";
+    // Who added this account — lets the admin who submitted it (as opposed
+    // to the owner who approves it) see a "still pending" reminder of their
+    // own submission.
+    public Guid? CreatedBy { get; set; }
 
     public Company? Company { get; set; }
 }
