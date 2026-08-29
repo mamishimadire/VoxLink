@@ -14,6 +14,7 @@ import { DialerPage } from "./DialerPage";
 import { ProfilePage } from "./ProfilePage";
 import { AuditLogView } from "./AuditLogView";
 import { LogoutConfirmModal } from "../components/LogoutConfirmModal";
+import { NotificationBell } from "../components/NotificationBell";
 
 interface Company {
   status: string;
@@ -84,6 +85,22 @@ export function DashboardPage() {
   // analytics for oversight, but invoices stay owner/admin only.
   const showInvoicesTab = showBillingTab && (role === "owner" || role === "admin");
 
+  // Maps a notification's type to wherever that action actually lives —
+  // "user_approval" means different tabs depending on whether this caller
+  // sees the platform-admin nav or the client nav, and "price_change" only
+  // ever shows for VoxLink's own business owner (platform nav), so there's
+  // no ambiguity in practice.
+  function handleNotificationNavigate(type: string) {
+    if (isPlatformAdmin) {
+      if (type === "user_approval") setPlatformTab("internal");
+      else if (type === "price_change") setPlatformTab("pricing");
+      else if (type === "company_approval" || type === "payment_verification") setPlatformTab("clients");
+    } else {
+      if (type === "user_approval") setClientTab("team");
+      else if (type === "agreement_unsigned") setClientTab("billing");
+    }
+  }
+
   return (
     <div className="dashboard">
       <header className="topbar">
@@ -148,6 +165,7 @@ export function DashboardPage() {
           </nav>
         )}
         <div className="topbar-right">
+          <NotificationBell onNavigate={handleNotificationNavigate} />
           <button
             className="link-btn"
             onClick={() => setShowProfile(true)}
