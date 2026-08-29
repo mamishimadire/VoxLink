@@ -11,6 +11,7 @@ interface Profile {
   region: string | null;
   gender: string | null;
   photoUrl: string | null;
+  theme: string;
 }
 
 export function ProfilePage({ onBack }: { onBack: () => void }) {
@@ -21,6 +22,7 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
   const [country, setCountry] = useState("");
   const [region, setRegion] = useState("");
   const [gender, setGender] = useState("");
+  const [theme, setTheme] = useState("dark");
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +38,21 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
         setCountry(p.country ?? "");
         setRegion(p.region ?? "");
         setGender(p.gender ?? "");
+        setTheme(p.theme);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load profile."));
+  }
+
+  async function handleThemeChange(next: string) {
+    setTheme(next);
+    // Applied immediately (not just on the profile page) — a per-user
+    // preference, not per-device, so it must follow this user everywhere.
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      await api.put("/api/users/me/theme", { theme: next }, token);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to update theme.");
+    }
   }
 
   useEffect(() => {
@@ -111,6 +126,17 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
             Upload photo
           </button>
         </div>
+      </div>
+
+      <div className="card inline-card">
+        <label>
+          Theme
+          <select value={theme} onChange={(e) => handleThemeChange(e.target.value)}>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <p className="hint">Applies only to your own account — other users keep their own theme.</p>
       </div>
 
       <form className="card inline-card" onSubmit={handleSave}>

@@ -23,6 +23,7 @@ public class User
     public string? Region { get; set; }
     public string? Gender { get; set; }
     public string? ProfilePicturePath { get; set; }
+    public string Theme { get; set; } = "dark";
 
     public Company? Company { get; set; }
 }

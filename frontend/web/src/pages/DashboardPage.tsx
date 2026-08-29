@@ -32,8 +32,14 @@ export function DashboardPage() {
 
   function refreshPhoto() {
     api
-      .get<{ photoUrl: string | null }>("/api/users/me", token)
-      .then((p) => setPhotoUrl(p.photoUrl))
+      .get<{ photoUrl: string | null; theme: string }>("/api/users/me", token)
+      .then((p) => {
+        setPhotoUrl(p.photoUrl);
+        // Per-user theme, not per-device — applied globally here so every
+        // page (not just the profile page) reflects the signed-in user's
+        // own saved preference.
+        document.documentElement.setAttribute("data-theme", p.theme);
+      })
       .catch(() => {});
   }
 

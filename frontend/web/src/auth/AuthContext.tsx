@@ -30,6 +30,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     sessionStorage.removeItem(STORAGE_KEY);
     setToken(null);
+    // Theme is per-user, not per-browser — don't let it leak into the next
+    // person's login/session on this same device.
+    document.documentElement.removeAttribute("data-theme");
   };
 
   return (

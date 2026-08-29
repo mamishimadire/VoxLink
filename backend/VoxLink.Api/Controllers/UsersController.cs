@@ -17,8 +17,11 @@ public record CreateUserRequest(
 
 public record UpdateProfileRequest(string FirstName, string LastName, string? Country, string? Region, string? Gender);
 
+public record UpdateThemeRequest(string Theme);
+
 public record ProfileResponse(
-    Guid Id, string FirstName, string LastName, string Email, string? Country, string? Region, string? Gender, string? PhotoUrl);
+    Guid Id, string FirstName, string LastName, string Email, string? Country, string? Region, string? Gender,
+    string? PhotoUrl, string Theme);
 
 [ApiController]
 [Authorize]
@@ -48,7 +51,7 @@ public class UsersController : ControllerBase
             ? null
             : await _storage.GetSignedUrlAsync(user.ProfilePicturePath, 3600, cancellationToken);
 
-        return Ok(new ProfileResponse(user.Id, user.FirstName, user.LastName, user.Email, user.Country, user.Region, user.Gender, photoUrl));
+        return Ok(new ProfileResponse(user.Id, user.FirstName, user.LastName, user.Email, user.Country, user.Region, user.Gender, photoUrl, user.Theme));
     }
 
     [HttpPut("me")]
@@ -71,6 +74,30 @@ public class UsersController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new { message = "Profile updated." });
+    }
+
+    /// <summary>
+    /// Separate from the rest of the profile so switching theme applies
+    /// immediately, without going through the full profile form/validation.
+    /// A per-user preference, not per-browser — it follows the signed-in
+    /// user across devices and never affects any other user's session.
+    /// </summary>
+    [HttpPut("me/theme")]
+    public async Task<IActionResult> UpdateTheme(UpdateThemeRequest request, CancellationToken cancellationToken)
+    {
+        if (request.Theme is not ("dark" or "light"))
+        {
+            return BadRequest(new { message = "Theme must be 'dark' or 'light'." });
+        }
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == User.GetUserId(), cancellationToken);
+        if (user is null) return NotFound();
+
+        user.Theme = request.Theme;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { message = "Theme updated.", theme = user.Theme });
     }
 
     [HttpPost("me/photo")]

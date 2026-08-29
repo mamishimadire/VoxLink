@@ -8,8 +8,34 @@
   --accent-hover: #4f46e5;
   --danger: #ef4444;
   --success: #22c55e;
+  --input-bg: #0f1222;
+  /* Status text colors (badges, .error, .success): light pastels that read
+     fine on this dark surface but need to darken on a light one below. */
+  --status-success-text: #86efac;
+  --status-danger-text: #fca5a5;
+  --status-info-text: #a5a6f6;
+  --status-warning-text: #fde047;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   color-scheme: dark;
+}
+
+/* Per-user theme choice (Profile page), applied as data-theme on <html> —
+   never system/browser-driven, since it must follow the signed-in user's
+   own saved preference, not the device. Dark (the values above) stays the
+   default with no attribute set, so a logged-out page (login/register) or
+   a user who hasn't chosen yet is unaffected. */
+:root[data-theme="light"] {
+  --bg: #f3f4fa;
+  --surface: #ffffff;
+  --border: #dfe1ef;
+  --text: #191b2c;
+  --muted: #62658a;
+  --input-bg: #ffffff;
+  --status-success-text: #15803d;
+  --status-danger-text: #b91c1c;
+  --status-info-text: #4338ca;
+  --status-warning-text: #a16207;
+  color-scheme: light;
 }
 
 * {
@@ -348,7 +374,7 @@ label {
 input,
 select {
   width: 100%;
-  background: #0f1222;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
@@ -407,7 +433,7 @@ button:disabled {
 .error {
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
+  color: var(--status-danger-text);
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -416,7 +442,7 @@ button:disabled {
 .success {
   background: rgba(34, 197, 94, 0.12);
   border: 1px solid rgba(34, 197, 94, 0.4);
-  color: #86efac;
+  color: var(--status-success-text);
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -541,22 +567,22 @@ button:disabled {
 
 .badge-active {
   background: rgba(34, 197, 94, 0.15);
-  color: #86efac;
+  color: var(--status-success-text);
 }
 
 .badge-suspended {
   background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
+  color: var(--status-danger-text);
 }
 
 .badge-invited {
   background: rgba(99, 102, 241, 0.15);
-  color: #a5a6f6;
+  color: var(--status-info-text);
 }
 
 .badge-pending {
   background: rgba(234, 179, 8, 0.15);
-  color: #fde047;
+  color: var(--status-warning-text);
 }
 
 .contact-grid {
