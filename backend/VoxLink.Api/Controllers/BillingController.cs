@@ -240,9 +240,11 @@ public class BillingController : ControllerBase
     {
         // Breaks down every teammate's own call activity by name — an
         // ordinary employee must not be able to see their peers' individual
-        // usage, only an owner/admin managing the team.
+        // usage. A manager can view this for team oversight, same as an
+        // owner/admin, but (unlike them) has no authority to act on it —
+        // no invoices, no agreement signing, no user management.
         var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-        if (callerRole is not ("owner" or "admin"))
+        if (callerRole is not ("owner" or "admin" or "manager"))
         {
             return Forbid();
         }
@@ -300,6 +302,15 @@ public class BillingController : ControllerBase
         [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] int? year,
         CancellationToken cancellationToken)
     {
+        // Invoices are financial/legal documents — view access stays
+        // owner/admin only, same as signing the agreement. A manager can see
+        // usage analytics for oversight but not the invoices themselves.
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole is not ("owner" or "admin"))
+        {
+            return Forbid();
+        }
+
         var companyId = User.GetCompanyId();
         var query = _db.Invoices.Where(i => i.CompanyId == companyId);
 
@@ -382,6 +393,12 @@ public class BillingController : ControllerBase
     [HttpGet("invoices/{id:guid}/pdf")]
     public async Task<IActionResult> GetInvoicePdf(Guid id, CancellationToken cancellationToken)
     {
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole is not ("owner" or "admin"))
+        {
+            return Forbid();
+        }
+
         var companyId = User.GetCompanyId();
         var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == id && i.CompanyId == companyId, cancellationToken);
         if (invoice?.PdfStoragePath is null) return NotFound();

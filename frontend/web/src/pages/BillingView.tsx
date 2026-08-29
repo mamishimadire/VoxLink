@@ -73,6 +73,9 @@ interface ClientUsageRow {
 export function BillingView() {
   const { token, role, isPlatformAdmin } = useAuth();
   const canManage = role === "owner" || role === "admin";
+  // A manager can view call-usage analytics for team oversight, but has no
+  // authority to act on billing (no agreement signing, no invoices).
+  const canViewAnalytics = canManage || role === "manager";
 
   const [usage, setUsage] = useState<Usage | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -89,7 +92,7 @@ export function BillingView() {
       api.get<Usage>("/api/billing/usage", token),
       api.get<{ isInternal: boolean }>("/api/companies/me", token),
       api.get<Agreement>("/api/billing/agreement", token),
-      canManage ? api.get<Analytics>("/api/billing/analytics", token) : Promise.resolve(null),
+      canViewAnalytics ? api.get<Analytics>("/api/billing/analytics", token) : Promise.resolve(null),
       isPlatformAdmin ? api.get<ClientUsageRow[]>("/api/platform/usage", token) : Promise.resolve(null),
     ]);
     if (usageResult.status === "fulfilled") setUsage(usageResult.value);
@@ -168,7 +171,7 @@ export function BillingView() {
         )}
       </div>
 
-      {canManage && analytics && (analytics.byUser.length > 0 || analytics.byDestination.length > 0) && (
+      {canViewAnalytics && analytics && (analytics.byUser.length > 0 || analytics.byDestination.length > 0) && (
         <>
           <h2>Usage monitoring</h2>
           <p className="hint">

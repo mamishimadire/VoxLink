@@ -80,6 +80,9 @@ export function DashboardPage() {
   }
 
   const showBillingTab = !isPlatformAdmin && !isEmployee && company !== null && !company.isInternal;
+  // Invoices are financial/legal documents — a manager can view usage
+  // analytics for oversight, but invoices stay owner/admin only.
+  const showInvoicesTab = showBillingTab && (role === "owner" || role === "admin");
 
   return (
     <div className="dashboard">
@@ -124,7 +127,7 @@ export function DashboardPage() {
                 Billing
               </button>
             )}
-            {showBillingTab && (
+            {showInvoicesTab && (
               <button className={clientTab === "invoices" ? "tab active" : "tab"} onClick={() => setClientTab("invoices")}>
                 Invoices
               </button>
@@ -208,7 +211,7 @@ export function DashboardPage() {
           )
         ) : showBillingTab && clientTab === "billing" ? (
           <BillingView />
-        ) : showBillingTab && clientTab === "invoices" ? (
+        ) : showInvoicesTab && clientTab === "invoices" ? (
           <InvoicesView />
         ) : clientTab === "dialer" ? (
           <DialerPage />
