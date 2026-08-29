@@ -7,9 +7,10 @@ namespace VoxLink.Api.Data;
 
 /// <summary>
 /// Stamps every connection this DbContext opens with the current request's
-/// tenant (company_id) and platform-admin status as Postgres session
-/// variables, which the RLS policies on every table read via
-/// current_setting('app.current_company_id'/'app.is_platform_admin').
+/// tenant (company_id), user (user_id), and platform-admin status as
+/// Postgres session variables, which the RLS policies on every table read
+/// via current_setting('app.current_company_id'/'app.current_user_id'/
+/// 'app.is_platform_admin').
 ///
 /// Runs on every Open() call, not just the first — including when a logical
 /// connection reuses a pooled physical one — so a connection can never carry
@@ -41,17 +42,23 @@ public class TenantContextInterceptor : DbConnectionInterceptor
     {
         var user = _httpContextAccessor.HttpContext?.User;
         var companyId = user?.FindFirst("company_id")?.Value ?? "";
+        var userId = user?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value ?? "";
         var isPlatformAdmin = user?.IsPlatformAdmin() ?? false;
 
         var command = connection.CreateCommand();
         await using (command)
         {
-            command.CommandText = "select set_config('app.current_company_id', @company_id, false), set_config('app.is_platform_admin', @is_admin, false)";
+            command.CommandText = "select set_config('app.current_company_id', @company_id, false), set_config('app.current_user_id', @user_id, false), set_config('app.is_platform_admin', @is_admin, false)";
 
             var companyIdParam = command.CreateParameter();
             companyIdParam.ParameterName = "company_id";
             companyIdParam.Value = companyId;
             command.Parameters.Add(companyIdParam);
+
+            var userIdParam = command.CreateParameter();
+            userIdParam.ParameterName = "user_id";
+            userIdParam.Value = userId;
+            command.Parameters.Add(userIdParam);
 
             var isAdminParam = command.CreateParameter();
             isAdminParam.ParameterName = "is_admin";

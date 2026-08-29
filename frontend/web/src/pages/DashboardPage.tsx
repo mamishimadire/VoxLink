@@ -61,12 +61,16 @@ export function DashboardPage() {
   // light/dark if the OS/browser preference flips while the app is open.
   useEffect(() => watchSystemTheme(() => applyTheme(themeRef.current)), []);
 
+  const isEmployee = role === "employee";
+
   useEffect(() => {
     api.get<Company>("/api/companies/me", token).then((c) => {
       setCompany(c);
-      // VoxLink's own internal team has no billing/agreement/license of its
-      // own to manage — land them straight on Team instead.
-      setClientTab(c.isInternal ? "team" : "billing");
+      // An employee only ever has the dialer — everything else here (team,
+      // billing, invoices) is a management view. VoxLink's own internal
+      // team has no billing/agreement/license of its own to manage, so it
+      // still lands on Team instead of Billing.
+      setClientTab(isEmployee ? "dialer" : c.isInternal ? "team" : "billing");
     });
     refreshPhoto();
   }, []);
@@ -75,7 +79,7 @@ export function DashboardPage() {
     return <OnboardingPage />;
   }
 
-  const showBillingTab = !isPlatformAdmin && company !== null && !company.isInternal;
+  const showBillingTab = !isPlatformAdmin && !isEmployee && company !== null && !company.isInternal;
 
   return (
     <div className="dashboard">
@@ -125,9 +129,11 @@ export function DashboardPage() {
                 Invoices
               </button>
             )}
-            <button className={clientTab === "team" ? "tab active" : "tab"} onClick={() => setClientTab("team")}>
-              Team
-            </button>
+            {!isEmployee && (
+              <button className={clientTab === "team" ? "tab active" : "tab"} onClick={() => setClientTab("team")}>
+                Team
+              </button>
+            )}
             <button className={clientTab === "dialer" ? "tab active" : "tab"} onClick={() => setClientTab("dialer")}>
               Phone
             </button>

@@ -26,7 +26,9 @@ public class ContactsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetContacts(CancellationToken cancellationToken)
     {
+        var userId = User.GetUserId();
         var contacts = await _db.Contacts
+            .Where(c => c.UserId == userId)
             .OrderByDescending(c => c.IsFavorite).ThenBy(c => c.FirstName).ThenBy(c => c.LastName)
             .Select(c => new ContactResponse(c.Id, c.FirstName, c.LastName, c.PhoneNumber, c.Email, c.Notes, c.IsFavorite))
             .ToListAsync(cancellationToken);
@@ -37,7 +39,8 @@ public class ContactsController : ControllerBase
     [HttpPut("{id:guid}/favorite")]
     public async Task<IActionResult> SetFavorite(Guid id, SetFavoriteRequest request, CancellationToken cancellationToken)
     {
-        var contact = await _db.Contacts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        var userId = User.GetUserId();
+        var contact = await _db.Contacts.FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId, cancellationToken);
         if (contact is null) return NotFound();
 
         contact.IsFavorite = request.IsFavorite;
@@ -57,6 +60,7 @@ public class ContactsController : ControllerBase
         {
             Id = Guid.NewGuid(),
             CompanyId = User.GetCompanyId(),
+            UserId = User.GetUserId(),
             FirstName = request.FirstName,
             LastName = request.LastName,
             PhoneNumber = request.PhoneNumber,
@@ -74,7 +78,8 @@ public class ContactsController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteContact(Guid id, CancellationToken cancellationToken)
     {
-        var contact = await _db.Contacts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        var userId = User.GetUserId();
+        var contact = await _db.Contacts.FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId, cancellationToken);
         if (contact is null) return NotFound();
 
         _db.Contacts.Remove(contact);

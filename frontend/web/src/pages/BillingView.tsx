@@ -89,7 +89,7 @@ export function BillingView() {
       api.get<Usage>("/api/billing/usage", token),
       api.get<{ isInternal: boolean }>("/api/companies/me", token),
       api.get<Agreement>("/api/billing/agreement", token),
-      api.get<Analytics>("/api/billing/analytics", token),
+      canManage ? api.get<Analytics>("/api/billing/analytics", token) : Promise.resolve(null),
       isPlatformAdmin ? api.get<ClientUsageRow[]>("/api/platform/usage", token) : Promise.resolve(null),
     ]);
     if (usageResult.status === "fulfilled") setUsage(usageResult.value);

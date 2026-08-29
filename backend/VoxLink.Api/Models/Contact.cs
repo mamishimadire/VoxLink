@@ -4,6 +4,9 @@ public class Contact
 {
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
+    // Personal to whoever saved it — never shared with teammates in the same
+    // company, unlike company-wide data such as billing or the team list.
+    public Guid UserId { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? CompanyName { get; set; }

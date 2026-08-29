@@ -238,6 +238,15 @@ public class BillingController : ControllerBase
     [HttpGet("analytics")]
     public async Task<ActionResult<AnalyticsResponse>> GetAnalytics(CancellationToken cancellationToken)
     {
+        // Breaks down every teammate's own call activity by name — an
+        // ordinary employee must not be able to see their peers' individual
+        // usage, only an owner/admin managing the team.
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole is not ("owner" or "admin"))
+        {
+            return Forbid();
+        }
+
         var companyId = User.GetCompanyId();
 
         var subscription = await _db.Subscriptions
