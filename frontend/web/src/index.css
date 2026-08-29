@@ -606,7 +606,7 @@ button:disabled {
 }
 
 .dialpad-key {
-  background: #242235;
+  background: var(--sp-key);
   border: none;
   color: var(--text);
   font-size: 16px;
@@ -627,7 +627,7 @@ button:disabled {
 }
 
 .dialpad-key:hover:not(:disabled) {
-  background: #2e2c44;
+  background: var(--sp-hover);
 }
 
 /* Softphone (Phone tab) — its own dark app-shell, distinct palette from
@@ -640,12 +640,35 @@ button:disabled {
   --sp-muted: #8b899e;
   --sp-green: #2ecc71;
   --sp-red: #e74c3c;
+  --sp-text: #fff;
+  --sp-text-soft: #c9c7d6;
+  --sp-surface2: #2a2840;
+  --sp-hover: #221f36;
+  --sp-toggle-off: #33324a;
+  --sp-row-hover: rgba(255, 255, 255, 0.02);
   background: var(--sp-bg);
   border: 1px solid var(--sp-border);
   border-radius: 12px;
   overflow: hidden;
-  color: #fff;
+  color: var(--sp-text);
   position: relative;
+}
+
+/* The dialer is a per-user theme choice too, same as the rest of the app —
+   overrides just the softphone's own local custom properties so every
+   .softphone-* rule below adapts without needing its own light variant. */
+:root[data-theme="light"] .softphone {
+  --sp-bg: #ffffff;
+  --sp-panel: #f4f5fa;
+  --sp-key: #eef0f7;
+  --sp-border: #e2e4f0;
+  --sp-muted: #6b7094;
+  --sp-text: #191b2c;
+  --sp-text-soft: #43485e;
+  --sp-surface2: #e9ebf5;
+  --sp-hover: #e2e4f5;
+  --sp-toggle-off: #d5d8e6;
+  --sp-row-hover: rgba(15, 23, 42, 0.04);
 }
 
 .softphone-topstrip {
@@ -661,14 +684,14 @@ button:disabled {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #c9c7d6;
+  color: var(--sp-text-soft);
 }
 
 .softphone-toggle {
   width: 34px;
   height: 18px;
   border-radius: 999px;
-  background: #33324a;
+  background: var(--sp-toggle-off);
   position: relative;
   cursor: pointer;
 }
@@ -743,7 +766,7 @@ button:disabled {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #2a2840;
+  background: var(--sp-surface2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -766,7 +789,7 @@ button:disabled {
   top: 44px;
   right: 0;
   background: var(--sp-panel);
-  border: 1px solid #2a2840;
+  border: 1px solid var(--sp-border);
   border-radius: 10px;
   padding: 6px;
   width: 160px;
@@ -784,7 +807,7 @@ button:disabled {
 }
 
 .softphone-status-menu-item:hover {
-  background: #221f36;
+  background: var(--sp-hover);
 }
 
 .softphone-status-dot-inline {
@@ -800,7 +823,7 @@ button:disabled {
 }
 
 .softphone-status-menu-divider {
-  border-top: 1px solid #2a2840;
+  border-top: 1px solid var(--sp-border);
   margin: 4px 0;
 }
 
@@ -823,11 +846,11 @@ button:disabled {
 
 .modal-card {
   width: 360px;
-  background: #191826;
+  background: var(--surface);
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid #2a2840;
-  color: #fff;
+  border: 1px solid var(--border);
+  color: var(--text);
 }
 
 .modal-header {
@@ -835,13 +858,14 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(90deg, #221f36, #191826);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   font-size: 15px;
   font-weight: 600;
 }
 
 .modal-muted-icon {
-  color: #8b899e;
+  color: var(--muted);
   cursor: pointer;
 }
 
@@ -855,7 +879,7 @@ button:disabled {
 .modal-text {
   font-size: 15px;
   margin: 20px 0 28px;
-  color: #fff;
+  color: var(--text);
 }
 
 .modal-actions {
@@ -867,27 +891,27 @@ button:disabled {
   padding: 10px 24px;
   border-radius: 999px;
   background: transparent;
-  border: 1px solid #3a3852;
-  color: #fff;
+  border: 1px solid var(--border);
+  color: var(--text);
   font-size: 13px;
 }
 
 .modal-btn-cancel:hover {
-  background: #221f36;
+  background: var(--surface);
 }
 
 .modal-btn-confirm {
   padding: 10px 24px;
   border-radius: 999px;
-  background: #7f77dd;
+  background: var(--accent);
   border: none;
-  color: #13121c;
+  color: #fff;
   font-size: 13px;
   font-weight: 600;
 }
 
 .softphone-modal-btn-confirm:hover {
-  background: #6c63d6;
+  background: var(--accent-hover);
 }
 
 .softphone-body {
@@ -918,18 +942,18 @@ button:disabled {
   border-radius: 10px;
   margin-bottom: 8px;
   cursor: pointer;
-  color: #6f6d82;
+  color: var(--sp-muted);
   width: 74px;
   font-size: 11px;
 }
 
 .softphone-nav-item.active {
-  background: #221f36;
-  color: #fff;
+  background: var(--sp-hover);
+  color: var(--sp-text);
 }
 
 .softphone-nav-item:hover:not(.active) {
-  color: #c9c7d6;
+  color: var(--sp-text-soft);
 }
 
 .softphone-main {
@@ -953,7 +977,7 @@ button:disabled {
 
 .softphone-dialer-header {
   font-size: 14px;
-  color: #c9c7d6;
+  color: var(--sp-text-soft);
   font-weight: 600;
   margin-bottom: 20px;
 }
@@ -977,7 +1001,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #2a2840;
+  border-bottom: 1px solid var(--sp-border);
   padding-bottom: 10px;
 }
 
@@ -992,14 +1016,14 @@ button:disabled {
   background: transparent;
   border: none;
   outline: none;
-  color: #fff;
+  color: var(--sp-text);
   font-size: 16px;
   width: 100%;
   padding: 0;
 }
 
 .softphone-clear-icon {
-  color: #6f6d82;
+  color: var(--sp-muted);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -1056,7 +1080,7 @@ button:disabled {
   border-radius: 999px;
   background: var(--sp-key);
   font-size: 12px;
-  color: #c9c7d6;
+  color: var(--sp-text-soft);
 }
 
 .softphone-stage {
@@ -1090,11 +1114,11 @@ button:disabled {
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: #2a2840;
+  background: var(--sp-surface2);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5c5972;
+  color: var(--sp-muted);
   margin-bottom: 20px;
 }
 
@@ -1122,21 +1146,21 @@ button:disabled {
 }
 
 .softphone-recent-row:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--sp-row-hover);
 }
 
 .softphone-recent-avatar {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: #2a2840;
+  background: var(--sp-surface2);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 13px;
   font-weight: 600;
   margin-right: 14px;
-  color: #c9c7d6;
+  color: var(--sp-text-soft);
   flex-shrink: 0;
 }
 
@@ -1204,8 +1228,8 @@ button:disabled {
 
 .softphone-settings-select {
   background: var(--sp-key);
-  border: 1px solid #2a2840;
-  color: #fff;
+  border: 1px solid var(--sp-border);
+  color: var(--sp-text);
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 12px;
