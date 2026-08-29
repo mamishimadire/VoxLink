@@ -134,7 +134,7 @@ public class ApprovalsController : ControllerBase
         revokeRequest.Company!.Status = "suspended";
         revokeRequest.Company.UpdatedAt = DateTimeOffset.UtcNow;
 
-        AuditLogService.Log(_db, revokeRequest.CompanyId, User.GetUserId(), User.GetEmail(), "license_revoke.approved", "company", revokeRequest.CompanyId,
+        AuditLogService.LogCrossTenant(_db, revokeRequest.CompanyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "license_revoke.approved", "company", revokeRequest.CompanyId,
             $"Approved revoking {revokeRequest.Company.Name}'s license");
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -160,7 +160,7 @@ public class ApprovalsController : ControllerBase
         revokeRequest.ReviewedAt = DateTimeOffset.UtcNow;
         revokeRequest.ReviewNote = request.Note;
 
-        AuditLogService.Log(_db, revokeRequest.CompanyId, User.GetUserId(), User.GetEmail(), "license_revoke.rejected", "company", revokeRequest.CompanyId,
+        AuditLogService.LogCrossTenant(_db, revokeRequest.CompanyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "license_revoke.rejected", "company", revokeRequest.CompanyId,
             $"Rejected revoking {revokeRequest.Company!.Name}'s license: {request.Note}");
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -190,7 +190,7 @@ public class ApprovalsController : ControllerBase
             generationRequest.ReviewNote = request.Note;
             generationRequest.GeneratedInvoiceId = invoice.Id;
 
-            AuditLogService.Log(_db, generationRequest.CompanyId, User.GetUserId(), User.GetEmail(), "invoice.generated", "invoice", invoice.Id,
+            AuditLogService.LogCrossTenant(_db, generationRequest.CompanyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "invoice.generated", "invoice", invoice.Id,
                 $"Approved manual invoice generation: {invoice.InvoiceNumber} for R{invoice.AmountDue:0.00}");
             await _db.SaveChangesAsync(cancellationToken);
 
@@ -220,7 +220,7 @@ public class ApprovalsController : ControllerBase
         generationRequest.ReviewedAt = DateTimeOffset.UtcNow;
         generationRequest.ReviewNote = request.Note;
 
-        AuditLogService.Log(_db, generationRequest.CompanyId, User.GetUserId(), User.GetEmail(), "invoice.generation_rejected", "company", generationRequest.CompanyId,
+        AuditLogService.LogCrossTenant(_db, generationRequest.CompanyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "invoice.generation_rejected", "company", generationRequest.CompanyId,
             $"Rejected manual invoice generation for {generationRequest.Company!.Name}: {request.Note}");
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -285,7 +285,7 @@ public class ApprovalsController : ControllerBase
         changeRequest.ReviewedAt = now;
         changeRequest.ReviewNote = request.Note;
 
-        AuditLogService.Log(_db, changeRequest.CompanyId, User.GetUserId(), User.GetEmail(), "license_change.approved", "company", changeRequest.CompanyId,
+        AuditLogService.LogCrossTenant(_db, changeRequest.CompanyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "license_change.approved", "company", changeRequest.CompanyId,
             $"Approved setting {changeRequest.Company!.Name} to {changeRequest.Plan!.Name}, expires {changeRequest.ExpiresAt:yyyy-MM-dd}");
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -311,7 +311,7 @@ public class ApprovalsController : ControllerBase
         changeRequest.ReviewedAt = DateTimeOffset.UtcNow;
         changeRequest.ReviewNote = request.Note;
 
-        AuditLogService.Log(_db, changeRequest.CompanyId, User.GetUserId(), User.GetEmail(), "license_change.rejected", "company", changeRequest.CompanyId,
+        AuditLogService.LogCrossTenant(_db, changeRequest.CompanyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "license_change.rejected", "company", changeRequest.CompanyId,
             $"Rejected a license change for {changeRequest.Company!.Name}: {request.Note}");
         await _db.SaveChangesAsync(cancellationToken);
 

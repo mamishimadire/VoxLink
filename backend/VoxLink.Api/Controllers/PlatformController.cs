@@ -181,7 +181,7 @@ public class PlatformController : ControllerBase
         };
 
         _db.LicenseChangeRequests.Add(changeRequest);
-        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "license_change.proposed", "company", companyId,
+        AuditLogService.LogCrossTenant(_db, companyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "license_change.proposed", "company", companyId,
             $"Proposed setting {company.Name} to {plan.Name}, expires {request.ExpiresAt:yyyy-MM-dd}");
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -310,7 +310,7 @@ public class PlatformController : ControllerBase
             }
         }
 
-        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "company.approved", "company", companyId,
+        AuditLogService.LogCrossTenant(_db, companyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "company.approved", "company", companyId,
             $"{company.Name} approved and fully activated");
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -341,7 +341,7 @@ public class PlatformController : ControllerBase
         company.Status = "rejected";
         company.RejectedReason = request.Reason;
         company.UpdatedAt = DateTimeOffset.UtcNow;
-        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "company.rejected", "company", companyId,
+        AuditLogService.LogCrossTenant(_db, companyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "company.rejected", "company", companyId,
             $"{company.Name} rejected: {request.Reason}");
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -389,7 +389,7 @@ public class PlatformController : ControllerBase
         };
 
         _db.LicenseRevokeRequests.Add(revokeRequest);
-        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "license_revoke.proposed", "company", companyId,
+        AuditLogService.LogCrossTenant(_db, companyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "license_revoke.proposed", "company", companyId,
             $"Proposed revoking {company.Name}'s license" + (request.Reason is { Length: > 0 } r ? $": {r}" : ""));
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -651,6 +651,8 @@ public class PlatformController : ControllerBase
             company.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
+        AuditLogService.LogCrossTenant(_db, payment.CompanyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "payment.verified", "payment", payment.Id,
+            $"Verified a payment of R{payment.Amount:0.00}" + (company?.Name is { } name ? $" from {name}" : ""));
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(new { message = "Payment verified." });
     }
@@ -865,7 +867,7 @@ public class PlatformController : ControllerBase
         };
 
         _db.InvoiceGenerationRequests.Add(generationRequest);
-        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "invoice.generation_proposed", "company", companyId,
+        AuditLogService.LogCrossTenant(_db, companyId, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "invoice.generation_proposed", "company", companyId,
             "Requested a manually-generated invoice");
         await _db.SaveChangesAsync(cancellationToken);
 

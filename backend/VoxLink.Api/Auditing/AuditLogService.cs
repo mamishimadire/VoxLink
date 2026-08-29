@@ -42,4 +42,34 @@ public static class AuditLogService
             CreatedAt = DateTimeOffset.UtcNow
         });
     }
+
+    /// <summary>
+    /// For a platform-admin action taken against a specific client company
+    /// (approving/rejecting it, revoking or changing its license, verifying
+    /// its payment, generating its invoice): writes TWO rows for the one
+    /// event — one under the client's own company (so they can see what
+    /// VoxLink did to their account) and one under the acting staff
+    /// member's own company (so VoxLink's own internal audit log shows what
+    /// its own team did — otherwise an action like a manager's approval
+    /// would only ever show up in the client's log, never VoxLink's own).
+    /// No-ops the second write if the two companies are the same (there's
+    /// no real cross-tenant action to record twice).
+    /// </summary>
+    public static void LogCrossTenant(
+        DbContext db,
+        Guid targetCompanyId,
+        Guid actorCompanyId,
+        Guid? actorUserId,
+        string? actorEmail,
+        string action,
+        string? entityType = null,
+        Guid? entityId = null,
+        string? details = null)
+    {
+        Log(db, targetCompanyId, actorUserId, actorEmail, action, entityType, entityId, details);
+        if (actorCompanyId != targetCompanyId)
+        {
+            Log(db, actorCompanyId, actorUserId, actorEmail, action, entityType, entityId, details);
+        }
+    }
 }
