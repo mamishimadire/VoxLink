@@ -690,6 +690,10 @@ button:disabled {
   border-bottom: none;
 }
 
+:root[data-theme="light"] .softphone-topstrip .softphone-identity-sub {
+  color: #000;
+}
+
 .softphone-toggle-row {
   display: flex;
   align-items: center;
