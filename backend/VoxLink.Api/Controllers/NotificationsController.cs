@@ -39,6 +39,29 @@ public class NotificationsController : ControllerBase
         var isPlatformAdmin = User.IsPlatformAdmin();
         var isBusinessOwner = User.IsBusinessOwner();
 
+        // Applies to every user regardless of role — password hygiene isn't
+        // an admin-only concern. Self-service change (Profile page) is the
+        // fast path this is meant to point people at, instead of waiting on
+        // an automatic reset email or an admin-triggered reset.
+        var passwordChangedAt = await _db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => u.PasswordChangedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        var passwordAgeDays = (int)(DateTimeOffset.UtcNow - passwordChangedAt).TotalDays;
+        if (passwordAgeDays >= PasswordPolicy.MaxPasswordAgeDays)
+        {
+            items.Add(new NotificationItem(
+                "password-expired", "password_expired",
+                "Your password has expired. Change it now on your Profile page to keep your account secure."));
+        }
+        else if (passwordAgeDays >= PasswordPolicy.MaxPasswordAgeDays - PasswordPolicy.PasswordExpiryWarningDays)
+        {
+            var daysLeft = PasswordPolicy.MaxPasswordAgeDays - passwordAgeDays;
+            items.Add(new NotificationItem(
+                "password-expiring", "password_expiring",
+                $"Your password expires in {daysLeft} day{(daysLeft == 1 ? "" : "s")} — change it now on your Profile page."));
+        }
+
         // A teammate an admin added, waiting on this owner specifically —
         // applies the same whether it's VoxLink's own internal team or a
         // client company's.
@@ -179,9 +202,10 @@ public class NotificationsController : ControllerBase
                 new NotificationItem($"price-fyi:{r.Id}", "price_change_pending", $"Your proposed price change for {r.PlanName} is still awaiting a business owner's review")));
         }
 
-        // The agreement is a client-company obligation, owner/admin only
-        // (matches who's allowed to sign it in BillingController).
-        if (role is "owner" or "admin")
+        // The agreement is a client-company obligation, owner only — a
+        // legal commitment, not a day-to-day admin action (matches who's
+        // allowed to sign it in BillingController).
+        if (role == "owner")
         {
             var company = await _db.Companies.FirstOrDefaultAsync(c => c.Id == companyId, cancellationToken);
             if (company is { IsInternal: false, Status: "active" })

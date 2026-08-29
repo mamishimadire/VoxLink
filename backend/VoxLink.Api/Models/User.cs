@@ -17,6 +17,11 @@ public class User
     public DateTimeOffset? PasswordResetExpiresAt { get; set; }
     public int FailedLoginAttempts { get; set; }
     public DateTimeOffset? LockedUntil { get; set; }
+    // When the user last actually set their own password (register, reset
+    // link, or self-service change) — drives the 30-day expiry policy.
+    // NOT touched by an admin issuing a reset link; only by the password
+    // actually being set.
+    public DateTimeOffset PasswordChangedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public string? Country { get; set; }

@@ -210,6 +210,9 @@ public class UsersController : ControllerBase
             Status = callerRole == "owner" ? "active" : "pending_approval",
             IsPlatformAdmin = isInternalCompany && request.Role == "admin",
             CreatedBy = User.GetUserId(),
+            // Placeholder alongside the placeholder hash — reset to the real
+            // moment they set an actual password via the invite link.
+            PasswordChangedAt = now,
             CreatedAt = now,
             UpdatedAt = now
         };

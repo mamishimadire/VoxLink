@@ -80,7 +80,12 @@ export function BillingView() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [agreement, setAgreement] = useState<Agreement | null>(null);
-  const [isInternal, setIsInternal] = useState(false);
+  // null = not yet known. Defaulting this to false made the Agreement
+  // section flash into view for EVERY user (including VoxLink's own, who
+  // should never see it) for as long as the initial fetch took, since
+  // `!isInternal` is true until the real value loads. Only render it once
+  // we've actually confirmed the company is not internal.
+  const [isInternal, setIsInternal] = useState<boolean | null>(null);
   const [clientUsage, setClientUsage] = useState<ClientUsageRow[] | null>(null);
   const [fullName, setFullName] = useState("");
   const [agree, setAgree] = useState(false);
@@ -260,7 +265,7 @@ export function BillingView() {
         </>
       )}
 
-      {!isInternal && (
+      {isInternal === false && role === "owner" && (
         <>
           <h2>Agreement</h2>
           {agreement?.signed ? (
@@ -269,7 +274,7 @@ export function BillingView() {
                 Signed by {agreement.agreement?.agreedByName} on {agreement.agreement?.agreedAt.slice(0, 10)}
               </p>
             </div>
-          ) : canManage ? (
+          ) : (
             <div className="card inline-card">
               <p className="hint">You need to sign the pay-as-you-go services agreement.</p>
               <label>
@@ -284,8 +289,6 @@ export function BillingView() {
                 Sign agreement
               </button>
             </div>
-          ) : (
-            <p className="hint">Not yet signed — ask your company admin to sign it.</p>
           )}
         </>
       )}

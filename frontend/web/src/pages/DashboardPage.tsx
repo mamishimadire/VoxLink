@@ -96,6 +96,10 @@ export function DashboardPage() {
   // ever shows for VoxLink's own business owner (platform nav), so there's
   // no ambiguity in practice.
   function handleNotificationNavigate(type: string) {
+    if (type === "password_expired" || type === "password_expiring") {
+      setShowProfile(true);
+      return;
+    }
     if (isPlatformAdmin) {
       if (type === "user_approval" || type === "user_approval_pending") setPlatformTab("internal");
       else if (type === "price_change" || type === "price_change_pending") setPlatformTab("pricing");

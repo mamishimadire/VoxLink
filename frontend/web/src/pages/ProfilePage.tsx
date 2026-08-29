@@ -29,6 +29,13 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [changingPassword, setChangingPassword] = useState(false);
+
   function load() {
     api
       .get<Profile>("/api/users/me", token)
@@ -84,6 +91,30 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
       setError(err instanceof ApiError ? err.message : "Failed to update profile.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleChangePassword(e: FormEvent) {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordMessage(null);
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New password and confirmation don't match.");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await api.post("/api/auth/change-password", { currentPassword, newPassword }, token);
+      setPasswordMessage("Password updated.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPasswordError(err instanceof ApiError ? err.message : "Failed to update password.");
+    } finally {
+      setChangingPassword(false);
     }
   }
 
@@ -188,6 +219,52 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
 
         <button type="submit" disabled={saving}>
           {saving ? "Saving..." : "Save changes"}
+        </button>
+      </form>
+
+      <h2>Change password</h2>
+      <form className="card inline-card" onSubmit={handleChangePassword}>
+        {passwordMessage && <div className="success">{passwordMessage}</div>}
+        {passwordError && <div className="error">{passwordError}</div>}
+        <p className="hint">
+          Passwords expire after 30 days. Change yours here any time instead of waiting for the automatic reminder
+          email or asking your admin to reset it for you.
+        </p>
+        <label>
+          Current password
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
+        </label>
+        <label>
+          New password
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            required
+          />
+        </label>
+        <label>
+          Confirm new password
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+            required
+          />
+        </label>
+        <p className="hint">
+          At least 10 characters, with an uppercase letter, a lowercase letter, a digit, and a special character.
+        </p>
+        <button type="submit" disabled={changingPassword}>
+          {changingPassword ? "Updating..." : "Update password"}
         </button>
       </form>
     </div>

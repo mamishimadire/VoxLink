@@ -234,6 +234,7 @@ public class PlatformController : ControllerBase
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
             Role = "admin",
             Status = "invited",
+            PasswordChangedAt = now,
             CreatedAt = now,
             UpdatedAt = now
         };

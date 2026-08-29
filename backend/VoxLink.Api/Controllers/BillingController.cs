@@ -145,8 +145,10 @@ public class BillingController : ControllerBase
     [HttpPost("agreement/sign")]
     public async Task<IActionResult> SignAgreement(SignAgreementRequest request, CancellationToken cancellationToken)
     {
+        // Owner only — the agreement is a legal commitment on the company's
+        // behalf, not a day-to-day admin action.
         var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-        if (callerRole is not ("owner" or "admin"))
+        if (callerRole != "owner")
         {
             return Forbid();
         }

@@ -106,6 +106,7 @@ public class AuthController : ControllerBase
             // (manages clients) and business owner (approves price changes).
             IsPlatformAdmin = isFirstAccountInSystem,
             IsBusinessOwner = isFirstAccountInSystem,
+            PasswordChangedAt = now,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -202,8 +203,12 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = passwordError });
         }
 
+        var now = DateTimeOffset.UtcNow;
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-        user.UpdatedAt = DateTimeOffset.UtcNow;
+        user.PasswordChangedAt = now;
+        user.UpdatedAt = now;
+        AuditLogService.Log(_db, user.CompanyId, user.Id, user.Email, "auth.password_changed", "user", user.Id,
+            "Changed their own password");
         await _db.SaveChangesAsync(cancellationToken);
 
         return NoContent();
@@ -243,6 +248,7 @@ public class AuthController : ControllerBase
         }
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.PasswordChangedAt = DateTimeOffset.UtcNow;
         user.PasswordResetTokenHash = null;
         user.PasswordResetExpiresAt = null;
         if (user.Status == "invited")

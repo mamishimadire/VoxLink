@@ -8,6 +8,25 @@ public static class PasswordPolicy
     private const int MaxFailedLoginAttempts = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
+    // A password is due for a mandatory refresh after 30 days; the last 7 of
+    // those get an advance "expiring soon" warning so the user has time to
+    // change it themselves rather than only finding out once it's already
+    // expired.
+    public const int MaxPasswordAgeDays = 30;
+    public const int PasswordExpiryWarningDays = 7;
+
+    public static int PasswordAgeDays(Models.User user) =>
+        (int)(DateTimeOffset.UtcNow - user.PasswordChangedAt).TotalDays;
+
+    public static bool IsPasswordExpired(Models.User user) =>
+        PasswordAgeDays(user) >= MaxPasswordAgeDays;
+
+    public static bool IsPasswordExpiringSoon(Models.User user)
+    {
+        var age = PasswordAgeDays(user);
+        return age >= MaxPasswordAgeDays - PasswordExpiryWarningDays && age < MaxPasswordAgeDays;
+    }
+
     /// <summary>
     /// Minimum 10 characters, at least one uppercase, one lowercase, one digit,
     /// and one special character. Returns null if valid, else a user-facing message.
