@@ -591,6 +591,16 @@ button:disabled {
   color: var(--status-warning-text);
 }
 
+.badge-pending_approval {
+  background: rgba(234, 179, 8, 0.15);
+  color: var(--status-warning-text);
+}
+
+.badge-rejected {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--status-danger-text);
+}
+
 .contact-grid {
   display: grid;
   grid-template-columns: 140px 1fr 1fr;

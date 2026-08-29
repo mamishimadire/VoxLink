@@ -578,6 +578,7 @@ public class PlatformController : ControllerBase
             {
                 r.Id,
                 CurrentPlanName = r.Plan!.Name,
+                r.ProposedBy,
                 r.NewName,
                 r.NewDescription,
                 r.NewMonthlyPrice,
@@ -634,6 +635,10 @@ public class PlatformController : ControllerBase
         var changeRequest = await _db.PlanChangeRequests.Include(r => r.Plan).FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
         if (changeRequest is null) return NotFound();
         if (changeRequest.Status != "pending") return BadRequest(new { message = "This request has already been reviewed." });
+        if (changeRequest.ProposedBy == User.GetUserId())
+        {
+            return BadRequest(new { message = "You cannot approve a price change you proposed yourself — it must be reviewed by a different business owner." });
+        }
 
         var plan = changeRequest.Plan!;
         var wasLargeTier = plan.Name == "Large";
@@ -680,6 +685,10 @@ public class PlatformController : ControllerBase
         var changeRequest = await _db.PlanChangeRequests.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
         if (changeRequest is null) return NotFound();
         if (changeRequest.Status != "pending") return BadRequest(new { message = "This request has already been reviewed." });
+        if (changeRequest.ProposedBy == User.GetUserId())
+        {
+            return BadRequest(new { message = "You cannot reject a price change you proposed yourself — it must be reviewed by a different business owner." });
+        }
 
         changeRequest.Status = "rejected";
         changeRequest.ReviewedBy = User.GetUserId();

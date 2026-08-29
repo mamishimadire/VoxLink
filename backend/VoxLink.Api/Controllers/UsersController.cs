@@ -166,13 +166,18 @@ public class UsersController : ControllerBase
         if (maxUsers is int limit)
         {
             var currentUserCount = await _db.Users.CountAsync(
-                u => u.CompanyId == companyId && u.Status != "suspended", cancellationToken);
+                u => u.CompanyId == companyId && u.Status != "suspended" && u.Status != "rejected", cancellationToken);
             if (currentUserCount >= limit)
             {
                 return BadRequest(new { message = $"Your plan allows up to {limit} users. Upgrade your tier to add more." });
             }
         }
 
+        // Segregation of duties: an admin can create a teammate, but that
+        // account only goes live once a business owner reviews and approves
+        // it — the admin cannot activate their own addition. An owner's own
+        // additions need no separate approval, since there's no higher
+        // authority in the company to review them against.
         var now = DateTimeOffset.UtcNow;
         var user = new User
         {
@@ -186,7 +191,7 @@ public class UsersController : ControllerBase
             // password via the emailed invite link.
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
             Role = request.Role,
-            Status = "active",
+            Status = callerRole == "owner" ? "active" : "pending_approval",
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -194,6 +199,9 @@ public class UsersController : ControllerBase
         _db.Users.Add(user);
         await _db.SaveChangesAsync(cancellationToken);
 
+        // Sent regardless of approval status: it only lets them set a password,
+        // login itself still checks Status == "active" and rejects a pending
+        // account until an owner approves it.
         var result = await _passwordResetService.IssueAndSendAsync(_db, user, isNewAccount: true, cancellationToken);
 
         return CreatedAtAction(nameof(GetUsers), new { id = user.Id }, new
@@ -201,9 +209,64 @@ public class UsersController : ControllerBase
             user.Id,
             user.Email,
             user.Role,
+            user.Status,
             emailSent = result.EmailSent,
             manualLink = result.EmailSent ? null : result.Link
         });
+    }
+
+    /// <summary>
+    /// Only a business owner can activate an admin-added teammate — the admin
+    /// who created the account cannot approve their own addition.
+    /// </summary>
+    [HttpPut("{id:guid}/approve")]
+    public async Task<IActionResult> ApproveUser(Guid id, CancellationToken cancellationToken)
+    {
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole != "owner")
+        {
+            return Forbid();
+        }
+
+        var companyId = User.GetCompanyId();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == id && u.CompanyId == companyId, cancellationToken);
+        if (user is null) return NotFound();
+
+        if (user.Status != "pending_approval")
+        {
+            return BadRequest(new { message = "This user is not awaiting approval." });
+        }
+
+        user.Status = "active";
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { message = "User approved." });
+    }
+
+    [HttpPut("{id:guid}/reject")]
+    public async Task<IActionResult> RejectUser(Guid id, CancellationToken cancellationToken)
+    {
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole != "owner")
+        {
+            return Forbid();
+        }
+
+        var companyId = User.GetCompanyId();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == id && u.CompanyId == companyId, cancellationToken);
+        if (user is null) return NotFound();
+
+        if (user.Status != "pending_approval")
+        {
+            return BadRequest(new { message = "This user is not awaiting approval." });
+        }
+
+        user.Status = "rejected";
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { message = "User rejected." });
     }
 
     [HttpPost("{id:guid}/reset-password")]

@@ -18,6 +18,7 @@ interface Plan {
 interface ChangeRequest {
   id: string;
   currentPlanName: string;
+  proposedBy: string;
   newName: string;
   newDescription: string | null;
   newMonthlyPrice: number;
@@ -45,7 +46,7 @@ const emptyEdit = {
 };
 
 export function PricingView() {
-  const { token, isBusinessOwner } = useAuth();
+  const { token, claims, isBusinessOwner } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [requests, setRequests] = useState<ChangeRequest[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -268,7 +269,7 @@ export function PricingView() {
               </td>
               <td>{new Date(r.proposedAt).toLocaleString()}</td>
               <td className="actions">
-                {isBusinessOwner ? (
+                {isBusinessOwner && r.proposedBy !== claims?.sub ? (
                   <>
                     <button className="link-btn" onClick={() => handleReview(r.id, true)}>
                       Approve
@@ -277,6 +278,8 @@ export function PricingView() {
                       Reject
                     </button>
                   </>
+                ) : isBusinessOwner ? (
+                  <span className="muted">You proposed this — another business owner must review it</span>
                 ) : (
                   <span className="muted">Awaiting business owner</span>
                 )}

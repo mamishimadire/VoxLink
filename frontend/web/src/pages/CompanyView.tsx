@@ -25,9 +25,14 @@ interface UserLimit {
 
 const emptyForm = { firstName: "", lastName: "", email: "", role: "employee" };
 
+function formatStatus(status: string) {
+  return status.replace(/_/g, " ");
+}
+
 export function CompanyView() {
   const { token, role } = useAuth();
   const canManageUsers = role === "owner" || role === "admin";
+  const isOwner = role === "owner";
 
   const [company, setCompany] = useState<Company | null>(null);
   const [users, setUsers] = useState<CompanyUser[]>([]);
@@ -71,11 +76,18 @@ export function CompanyView() {
     setManualLink(null);
     setLoading(true);
     try {
-      const res = await api.post<{ emailSent: boolean; manualLink: string | null }>("/api/users", form, token);
+      const res = await api.post<{ status: string; emailSent: boolean; manualLink: string | null }>(
+        "/api/users",
+        form,
+        token,
+      );
+      const pendingApproval = res.status === "pending_approval";
       setMessage(
-        res.emailSent
-          ? `Invite sent to ${form.email}.`
-          : `User created, but the invite email to ${form.email} failed to send. Copy the link below and send it to them another way.`,
+        pendingApproval
+          ? `${form.email} was added and can set their password, but needs a business owner to approve them before they can sign in.`
+          : res.emailSent
+            ? `Invite sent to ${form.email}.`
+            : `User created, but the invite email to ${form.email} failed to send. Copy the link below and send it to them another way.`,
       );
       setManualLink(res.manualLink);
       setForm(emptyForm);
@@ -84,6 +96,30 @@ export function CompanyView() {
       setError(err instanceof ApiError ? err.message : "Failed to add user.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleApprove(userId: string) {
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await api.put<{ message: string }>(`/api/users/${userId}/approve`, undefined, token);
+      setMessage(res.message);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Action failed.");
+    }
+  }
+
+  async function handleReject(userId: string) {
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await api.put<{ message: string }>(`/api/users/${userId}/reject`, undefined, token);
+      setMessage(res.message);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Action failed.");
     }
   }
 
@@ -153,13 +189,28 @@ export function CompanyView() {
               <td>{u.email}</td>
               <td>{u.role}</td>
               <td>
-                <span className={`badge badge-${u.status}`}>{u.status}</span>
+                <span className={`badge badge-${u.status}`}>{formatStatus(u.status)}</span>
               </td>
               {canManageUsers && (
                 <td className="actions">
-                  <button className="link-btn" onClick={() => handleResetPassword(u.id)}>
-                    Reset password
-                  </button>
+                  {u.status === "pending_approval" && isOwner && (
+                    <>
+                      <button className="link-btn" onClick={() => handleApprove(u.id)}>
+                        Approve
+                      </button>
+                      <button className="link-btn" onClick={() => handleReject(u.id)}>
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  {u.status === "pending_approval" && !isOwner && (
+                    <span className="hint">Awaiting owner approval</span>
+                  )}
+                  {u.status !== "pending_approval" && (
+                    <button className="link-btn" onClick={() => handleResetPassword(u.id)}>
+                      Reset password
+                    </button>
+                  )}
                   {u.status === "active" && (
                     <button className="link-btn" onClick={() => handleDeactivate(u.id)}>
                       Deactivate
