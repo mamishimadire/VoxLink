@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { decodeToken, getRole, isBusinessOwner, isPlatformAdmin, type VoxLinkClaims } from "./jwt";
+import { clearCachedTheme } from "../theme";
 
 interface AuthState {
   token: string | null;
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Theme is per-user, not per-browser — don't let it leak into the next
     // person's login/session on this same device.
     document.documentElement.removeAttribute("data-theme");
+    clearCachedTheme();
   };
 
   return (

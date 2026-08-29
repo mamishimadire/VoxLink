@@ -23,7 +23,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { LogoutConfirmModal } from "../components/LogoutConfirmModal";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
-import { applyTheme, watchSystemTheme } from "../theme";
+import { applyTheme, cacheTheme, watchSystemTheme } from "../theme";
 
 type Screen = "keypad" | "recents" | "contacts" | "settings";
 type CallState = "idle" | "connecting" | "in-call" | "ended";
@@ -269,6 +269,7 @@ export function DialerPage() {
         setPhotoUrl(p.photoUrl);
         setTheme(p.theme);
         themeRef.current = p.theme;
+        cacheTheme(p.theme);
       })
       .catch(() => {});
   }, [token]);
@@ -280,6 +281,7 @@ export function DialerPage() {
     setTheme(next);
     themeRef.current = next;
     applyTheme(next);
+    cacheTheme(next);
     try {
       await api.put("/api/users/me/theme", { theme: next }, token);
     } catch (err) {

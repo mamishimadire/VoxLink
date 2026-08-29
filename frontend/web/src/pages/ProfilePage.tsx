@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { applyTheme, watchSystemTheme } from "../theme";
+import { applyTheme, cacheTheme, watchSystemTheme } from "../theme";
 
 interface Profile {
   id: string;
@@ -40,6 +40,7 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
         setRegion(p.region ?? "");
         setGender(p.gender ?? "");
         setTheme(p.theme);
+        cacheTheme(p.theme);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load profile."));
   }
@@ -49,6 +50,7 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
     // Applied immediately (not just on the profile page) — a per-user
     // preference, not per-device, so it must follow this user everywhere.
     applyTheme(next);
+    cacheTheme(next);
     try {
       await api.put("/api/users/me/theme", { theme: next }, token);
     } catch (err) {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { applyTheme, watchSystemTheme } from "../theme";
+import { applyTheme, cacheTheme, watchSystemTheme } from "../theme";
 import { PlatformAdminView } from "./PlatformAdminView";
 import { CompanyView } from "./CompanyView";
 import { OnboardingPage } from "./OnboardingPage";
@@ -42,6 +42,7 @@ export function DashboardPage() {
         // own saved preference.
         themeRef.current = p.theme;
         applyTheme(p.theme);
+        cacheTheme(p.theme);
       })
       .catch(() => {});
   }
