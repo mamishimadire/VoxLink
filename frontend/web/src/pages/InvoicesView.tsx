@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 
 interface Invoice {
   id: string;
@@ -65,8 +66,8 @@ export function InvoicesView() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
@@ -81,7 +82,7 @@ export function InvoicesView() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load invoices.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -89,6 +90,8 @@ export function InvoicesView() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // A platform admin can generate a new invoice at any time.
+  useAutoRefresh(() => load(true), 15000);
 
   function updateFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((f) => ({ ...f, [key]: value }));

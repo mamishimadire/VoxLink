@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 
 interface CompanyUser {
   id: string;
@@ -55,9 +56,13 @@ export function CompanyView() {
 
   const atUserLimit = userLimit?.maxUsers != null && users.length >= userLimit.maxUsers;
 
-  useEffect(() => {
+  function load() {
     refresh().catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load."));
-  }, []);
+  }
+
+  useEffect(load, []);
+  // Another admin could add/deactivate a teammate at any time.
+  useAutoRefresh(load, 15000);
 
   async function handleAddUser(e: FormEvent) {
     e.preventDefault();

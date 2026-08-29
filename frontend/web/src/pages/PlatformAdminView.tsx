@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 
 interface Company {
   id: string;
@@ -106,9 +107,14 @@ export function PlatformAdminView() {
     }
   }
 
-  useEffect(() => {
+  function load() {
     refresh().catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load."));
-  }, []);
+  }
+
+  useEffect(load, []);
+  // New clients, payments, and usage can appear from other admins/sessions
+  // at any time — keep this screen from going stale without a manual reload.
+  useAutoRefresh(load, 15000);
 
   async function handleOnboard(e: FormEvent) {
     e.preventDefault();

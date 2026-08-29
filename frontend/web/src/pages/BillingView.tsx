@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 
 interface Usage {
   planName: string | null;
@@ -98,9 +99,14 @@ export function BillingView() {
     if (clientUsageResult.status === "fulfilled" && clientUsageResult.value) setClientUsage(clientUsageResult.value);
   }
 
-  useEffect(() => {
+  function load() {
     refresh().catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load."));
-  }, []);
+  }
+
+  useEffect(load, []);
+  // Usage/agreement/client-usage data can change from another admin's
+  // action (or a new call being made) at any time.
+  useAutoRefresh(load, 15000);
 
   async function handleSignAgreement() {
     setError(null);
