@@ -41,6 +41,15 @@ interface PendingPayment {
   createdAt: string;
 }
 
+interface PendingRevokeRequest {
+  id: string;
+  companyId: string;
+  companyName: string;
+  proposedByRole: string;
+  reason: string | null;
+  proposedAt: string;
+}
+
 const emptyForm = {
   companyName: "",
   phone: "",
@@ -55,11 +64,12 @@ const emptyForm = {
 };
 
 export function PlatformAdminView() {
-  const { token } = useAuth();
+  const { token, isBusinessOwner } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
+  const [pendingRevokes, setPendingRevokes] = useState<PendingRevokeRequest[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [licenseFormFor, setLicenseFormFor] = useState<string | null>(null);
   const [licensePlanId, setLicensePlanId] = useState("");
@@ -72,19 +82,23 @@ export function PlatformAdminView() {
   async function refresh() {
     // Each piece loads independently: a hiccup fetching one (e.g. usage)
     // must not blank out data the others already fetched successfully.
-    const [companyResult, usageResult, planResult, pendingPaymentResult] = await Promise.allSettled([
+    const [companyResult, usageResult, planResult, pendingPaymentResult, pendingRevokeResult] = await Promise.allSettled([
       api.get<Company[]>("/api/platform/companies", token),
       api.get<UsageRow[]>("/api/platform/usage", token),
       api.get<Plan[]>("/api/platform/plans", token),
       api.get<PendingPayment[]>("/api/platform/payments/pending", token),
+      api.get<PendingRevokeRequest[]>("/api/platform/revoke-requests", token),
     ]);
 
     if (companyResult.status === "fulfilled") setCompanies(companyResult.value);
     if (usageResult.status === "fulfilled") setUsage(usageResult.value);
     if (planResult.status === "fulfilled") setPlans(planResult.value);
     if (pendingPaymentResult.status === "fulfilled") setPendingPayments(pendingPaymentResult.value);
+    if (pendingRevokeResult.status === "fulfilled") setPendingRevokes(pendingRevokeResult.value);
 
-    const failed = [companyResult, usageResult, planResult, pendingPaymentResult].find((r) => r.status === "rejected");
+    const failed = [companyResult, usageResult, planResult, pendingPaymentResult, pendingRevokeResult].find(
+      (r) => r.status === "rejected",
+    );
     if (failed && failed.status === "rejected") {
       throw failed.reason;
     }
@@ -155,11 +169,39 @@ export function PlatformAdminView() {
     }
   }
 
-  async function handleRevoke(companyId: string, revoke: boolean) {
+  async function handleProposeRevoke(companyId: string) {
     setError(null);
     setMessage(null);
     try {
-      await api.post(`/api/platform/companies/${companyId}/${revoke ? "revoke" : "reactivate"}`, undefined, token);
+      const res = await api.post<{ message: string }>(`/api/platform/companies/${companyId}/revoke-request`, {}, token);
+      setMessage(res.message);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Action failed.");
+    }
+  }
+
+  async function handleReactivate(companyId: string) {
+    setError(null);
+    setMessage(null);
+    try {
+      await api.post(`/api/platform/companies/${companyId}/reactivate`, undefined, token);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Action failed.");
+    }
+  }
+
+  async function handleReviewRevoke(id: string, approve: boolean) {
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await api.post<{ message: string }>(
+        `/api/approvals/revoke-requests/${id}/${approve ? "approve" : "reject"}`,
+        {},
+        token,
+      );
+      setMessage(res.message);
       await refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Action failed.");
@@ -287,13 +329,16 @@ export function PlatformAdminView() {
                       Approve
                     </button>
                   )}
-                  {c.status === "active" && (
-                    <button className="link-btn" onClick={() => handleRevoke(c.id, true)}>
-                      Revoke
-                    </button>
-                  )}
+                  {c.status === "active" &&
+                    (pendingRevokes.some((r) => r.companyId === c.id) ? (
+                      <span className="muted">Revoke pending review</span>
+                    ) : (
+                      <button className="link-btn" onClick={() => handleProposeRevoke(c.id)}>
+                        Request revoke
+                      </button>
+                    ))}
                   {c.status === "suspended" && (
-                    <button className="link-btn" onClick={() => handleRevoke(c.id, false)}>
+                    <button className="link-btn" onClick={() => handleReactivate(c.id)}>
                       Reactivate
                     </button>
                   )}
@@ -311,6 +356,59 @@ export function PlatformAdminView() {
             <tr>
               <td colSpan={9} className="muted">
                 No client companies yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      <h2>Pending license revoke requests</h2>
+      <p className="hint">
+        Neither an admin nor an owner can revoke a license alone: an admin's request needs an owner's approval, and an
+        owner's request needs a manager's approval.
+      </p>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Requested by</th>
+            <th>Reason</th>
+            <th>Requested</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {pendingRevokes.map((r) => {
+            const canReview = r.proposedByRole === "admin" && isBusinessOwner;
+            return (
+              <tr key={r.id}>
+                <td>{r.companyName}</td>
+                <td style={{ textTransform: "capitalize" }}>{r.proposedByRole}</td>
+                <td>{r.reason ?? "—"}</td>
+                <td>{new Date(r.proposedAt).toLocaleString()}</td>
+                <td className="actions">
+                  {canReview ? (
+                    <>
+                      <button className="link-btn" onClick={() => handleReviewRevoke(r.id, true)}>
+                        Approve
+                      </button>
+                      <button className="link-btn" onClick={() => handleReviewRevoke(r.id, false)}>
+                        Reject
+                      </button>
+                    </>
+                  ) : r.proposedByRole === "admin" ? (
+                    <span className="muted">Awaiting a business owner</span>
+                  ) : (
+                    <span className="muted">Awaiting a manager</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+          {pendingRevokes.length === 0 && (
+            <tr>
+              <td colSpan={5} className="muted">
+                No pending revoke requests.
               </td>
             </tr>
           )}

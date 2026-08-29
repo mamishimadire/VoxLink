@@ -21,10 +21,12 @@ public record NotificationItem(string Id, string Type, string Message);
 public class NotificationsController : ControllerBase
 {
     private readonly VoxLinkDbContext _db;
+    private readonly VoxLinkServiceDbContext _serviceDb;
 
-    public NotificationsController(VoxLinkDbContext db)
+    public NotificationsController(VoxLinkDbContext db, VoxLinkServiceDbContext serviceDb)
     {
         _db = db;
+        _serviceDb = serviceDb;
     }
 
     [HttpGet]
@@ -64,6 +66,17 @@ public class NotificationsController : ControllerBase
 
             items.AddRange(pendingChanges.Select(r =>
                 new NotificationItem($"price:{r.Id}", "price_change", $"A price change for {r.PlanName} is awaiting your approval")));
+
+            // An admin's revoke proposal needs an owner (never a manager) —
+            // an owner's own proposal is handled in the manager section below.
+            var pendingRevokesForOwner = await _db.LicenseRevokeRequests
+                .Include(r => r.Company)
+                .Where(r => r.Status == "pending" && r.ProposedByRole == "admin" && r.ProposedBy != userId)
+                .Select(r => new { r.Id, CompanyName = r.Company!.Name })
+                .ToListAsync(cancellationToken);
+
+            items.AddRange(pendingRevokesForOwner.Select(r =>
+                new NotificationItem($"revoke:{r.Id}", "revoke_approval", $"A request to revoke {r.CompanyName}'s license is awaiting your approval")));
         }
 
         if (isPlatformAdmin)
@@ -83,6 +96,60 @@ public class NotificationsController : ControllerBase
 
             items.AddRange(pendingPayments.Select(p =>
                 new NotificationItem($"payment:{p.Id}", "payment_verification", $"Payment proof from {p.CompanyName} is awaiting verification")));
+
+            // FYI, not actionable: whoever proposed a revoke or a manual
+            // invoice has no authority to review their own submission, but
+            // shouldn't be left wondering whether it's been seen.
+            var ownPendingRevokes = await _db.LicenseRevokeRequests
+                .Include(r => r.Company)
+                .Where(r => r.Status == "pending" && r.ProposedBy == userId)
+                .Select(r => new { r.Id, CompanyName = r.Company!.Name, r.ProposedByRole })
+                .ToListAsync(cancellationToken);
+
+            items.AddRange(ownPendingRevokes.Select(r =>
+            {
+                var approver = r.ProposedByRole == "admin" ? "an owner" : "a manager";
+                return new NotificationItem($"revoke-fyi:{r.Id}", "revoke_pending", $"Your request to revoke {r.CompanyName}'s license is still awaiting approval from {approver}");
+            }));
+
+            var ownPendingInvoiceRequests = await _db.InvoiceGenerationRequests
+                .Include(r => r.Company)
+                .Where(r => r.Status == "pending" && r.ProposedBy == userId)
+                .Select(r => new { r.Id, CompanyName = r.Company!.Name })
+                .ToListAsync(cancellationToken);
+
+            items.AddRange(ownPendingInvoiceRequests.Select(r =>
+                new NotificationItem($"invoice-gen-fyi:{r.Id}", "invoice_generation_pending", $"Your invoice generation request for {r.CompanyName} is still awaiting a manager's approval")));
+        }
+
+        // A manager doesn't carry the platform-admin claim (deliberately —
+        // see VoxLinkServiceDbContext's doc comment), so RLS would block
+        // these cross-company lookups via the regular context even though
+        // the action is authorized; the service context bypasses that the
+        // same way ApprovalsController does.
+        if (role == "manager")
+        {
+            var callerCompany = await _serviceDb.Companies.FirstOrDefaultAsync(c => c.Id == companyId, cancellationToken);
+            if (callerCompany?.IsInternal == true)
+            {
+                var pendingRevokesForManager = await _serviceDb.LicenseRevokeRequests
+                    .Include(r => r.Company)
+                    .Where(r => r.Status == "pending" && r.ProposedByRole == "owner")
+                    .Select(r => new { r.Id, CompanyName = r.Company!.Name })
+                    .ToListAsync(cancellationToken);
+
+                items.AddRange(pendingRevokesForManager.Select(r =>
+                    new NotificationItem($"revoke:{r.Id}", "revoke_approval", $"A request to revoke {r.CompanyName}'s license is awaiting your approval")));
+
+                var pendingInvoiceRequests = await _serviceDb.InvoiceGenerationRequests
+                    .Include(r => r.Company)
+                    .Where(r => r.Status == "pending")
+                    .Select(r => new { r.Id, CompanyName = r.Company!.Name })
+                    .ToListAsync(cancellationToken);
+
+                items.AddRange(pendingInvoiceRequests.Select(r =>
+                    new NotificationItem($"invoice-gen:{r.Id}", "invoice_generation_approval", $"An invoice generation request for {r.CompanyName} is awaiting your approval")));
+            }
         }
 
         // FYI, not actionable: the admin who submitted something has no

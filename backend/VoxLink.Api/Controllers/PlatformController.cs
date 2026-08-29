@@ -29,6 +29,8 @@ public record SetLicenseRequest(Guid PlanId, DateTimeOffset ExpiresAt);
 
 public record RejectCompanyRequest(string Reason);
 
+public record ProposeRevokeRequest(string? Reason);
+
 public record ProposePlanChangeRequest(
     string NewName, string? NewDescription, decimal NewMonthlyPrice, int NewIncludedMinutes,
     decimal NewLocalRatePerMin, decimal NewInternationalRatePerMin,
@@ -326,16 +328,74 @@ public class PlatformController : ControllerBase
         return Ok(new { message = $"{company.Name} rejected." });
     }
 
-    [HttpPost("companies/{companyId:guid}/revoke")]
-    public async Task<IActionResult> Revoke(Guid companyId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Neither an admin nor an owner may revoke a license unilaterally — an
+    /// admin's proposal needs an owner's approval, an owner's proposal needs
+    /// a manager's approval (see ApprovalsController). This only submits the
+    /// request; nothing happens to the company until it's reviewed.
+    /// </summary>
+    [HttpPost("companies/{companyId:guid}/revoke-request")]
+    public async Task<IActionResult> ProposeRevoke(Guid companyId, ProposeRevokeRequest request, CancellationToken cancellationToken)
     {
+        var callerRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (callerRole is not ("admin" or "owner"))
+        {
+            return Forbid();
+        }
+
         var company = await _db.Companies.FirstOrDefaultAsync(c => c.Id == companyId, cancellationToken);
         if (company is null) return NotFound();
+        if (company.Status != "active")
+        {
+            return BadRequest(new { message = "Only an active company's license can be revoked." });
+        }
 
-        company.Status = "suspended";
-        company.UpdatedAt = DateTimeOffset.UtcNow;
+        var alreadyPending = await _db.LicenseRevokeRequests.AnyAsync(
+            r => r.CompanyId == companyId && r.Status == "pending", cancellationToken);
+        if (alreadyPending)
+        {
+            return BadRequest(new { message = "A revoke request for this company is already pending review." });
+        }
+
+        var revokeRequest = new LicenseRevokeRequest
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            ProposedBy = User.GetUserId(),
+            ProposedByRole = callerRole,
+            Reason = request.Reason,
+            ProposedAt = DateTimeOffset.UtcNow,
+            Status = "pending"
+        };
+
+        _db.LicenseRevokeRequests.Add(revokeRequest);
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "license_revoke.proposed", "company", companyId,
+            $"Proposed revoking {company.Name}'s license" + (request.Reason is { Length: > 0 } r ? $": {r}" : ""));
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(new { company.Id, company.Status });
+
+        var approverRole = callerRole == "admin" ? "an owner" : "a manager";
+        return Ok(new { message = $"Revoke request submitted. Awaiting approval from {approverRole}.", revokeRequest.Id });
+    }
+
+    [HttpGet("revoke-requests")]
+    public async Task<IActionResult> GetRevokeRequests(CancellationToken cancellationToken)
+    {
+        var requests = await _db.LicenseRevokeRequests
+            .Include(r => r.Company)
+            .Where(r => r.Status == "pending")
+            .OrderByDescending(r => r.ProposedAt)
+            .Select(r => new
+            {
+                r.Id,
+                r.CompanyId,
+                CompanyName = r.Company!.Name,
+                r.ProposedByRole,
+                r.Reason,
+                r.ProposedAt
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(requests);
     }
 
     [HttpPost("companies/{companyId:guid}/reactivate")]
@@ -748,21 +808,61 @@ public class PlatformController : ControllerBase
         }
     }
 
-    [HttpPost("companies/{companyId:guid}/invoices/generate")]
-    public async Task<IActionResult> GenerateClientInvoice(Guid companyId, CancellationToken cancellationToken)
+    /// <summary>
+    /// A manually-generated invoice (outside the automatic monthly cycle)
+    /// now always needs a manager's approval — this only submits the
+    /// request; nothing is actually generated until it's reviewed (see
+    /// ApprovalsController). Previews first so an obviously-invalid request
+    /// (nothing to bill yet) is rejected immediately rather than left
+    /// pending for a manager to discover only at approval time.
+    /// </summary>
+    [HttpPost("companies/{companyId:guid}/invoices/generate-request")]
+    public async Task<IActionResult> ProposeClientInvoiceGeneration(Guid companyId, CancellationToken cancellationToken)
     {
+        var alreadyPending = await _db.InvoiceGenerationRequests.AnyAsync(
+            r => r.CompanyId == companyId && r.Status == "pending", cancellationToken);
+        if (alreadyPending)
+        {
+            return BadRequest(new { message = "An invoice generation request for this company is already pending review." });
+        }
+
         try
         {
-            var invoice = await _invoiceGenerationService.GenerateAdHocInvoiceAsync(companyId, cancellationToken);
-            AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "invoice.generated", "invoice", invoice.Id,
-                $"Generated invoice {invoice.InvoiceNumber} for R{invoice.AmountDue:0.00}");
-            await _db.SaveChangesAsync(cancellationToken);
-            return Ok(new { message = $"Invoice {invoice.InvoiceNumber} generated for R{invoice.AmountDue:0.00}.", invoice.Id, invoice.InvoiceNumber });
+            await _invoiceGenerationService.PreviewAdHocInvoiceAsync(companyId, cancellationToken);
         }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
         }
+
+        var generationRequest = new InvoiceGenerationRequest
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            ProposedBy = User.GetUserId(),
+            ProposedAt = DateTimeOffset.UtcNow,
+            Status = "pending"
+        };
+
+        _db.InvoiceGenerationRequests.Add(generationRequest);
+        AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "invoice.generation_proposed", "company", companyId,
+            "Requested a manually-generated invoice");
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { message = "Invoice generation request submitted. Awaiting a manager's approval.", generationRequest.Id });
+    }
+
+    [HttpGet("invoice-generation-requests")]
+    public async Task<IActionResult> GetInvoiceGenerationRequests(CancellationToken cancellationToken)
+    {
+        var requests = await _db.InvoiceGenerationRequests
+            .Include(r => r.Company)
+            .Where(r => r.Status == "pending")
+            .OrderByDescending(r => r.ProposedAt)
+            .Select(r => new { r.Id, r.CompanyId, CompanyName = r.Company!.Name, r.ProposedAt })
+            .ToListAsync(cancellationToken);
+
+        return Ok(requests);
     }
 
     private static string[] SplitName(string fullName)

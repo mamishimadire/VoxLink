@@ -13,6 +13,12 @@ namespace VoxLink.Api.Data;
 ///     company's subscriptions by design.
 ///   - The anonymous Twilio status webhook: Twilio has no session/company
 ///     context to give us; we look the call up by provider call ID.
+///   - The manager-approval endpoints for revoke/invoice-generation requests
+///     (ApprovalsController): a manager approving one of these is
+///     legitimately acting across companies, but deliberately does NOT hold
+///     the is_platform_admin claim (that would also hand them every other
+///     PlatformController capability) — so RLS's usual platform-admin
+///     bypass wouldn't apply to them even though the action is authorized.
 /// Everything else must use the regular VoxLinkDbContext so tenant isolation
 /// is enforced by the database itself, not just application code.
 ///
@@ -39,6 +45,8 @@ public class VoxLinkServiceDbContext : DbContext, IVoxLinkDbContext
     public DbSet<PlanChangeRequest> PlanChangeRequests => Set<PlanChangeRequest>();
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<LicenseRevokeRequest> LicenseRevokeRequests => Set<LicenseRevokeRequest>();
+    public DbSet<InvoiceGenerationRequest> InvoiceGenerationRequests => Set<InvoiceGenerationRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) => VoxLinkDbContext.ConfigureModel(modelBuilder);
 }

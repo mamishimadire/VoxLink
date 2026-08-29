@@ -13,6 +13,7 @@ import { RevenueAnalyticsView } from "./RevenueAnalyticsView";
 import { DialerPage } from "./DialerPage";
 import { ProfilePage } from "./ProfilePage";
 import { AuditLogView } from "./AuditLogView";
+import { ApprovalsView } from "./ApprovalsView";
 import { LogoutConfirmModal } from "../components/LogoutConfirmModal";
 import { NotificationBell } from "../components/NotificationBell";
 
@@ -31,7 +32,7 @@ type PlatformTab =
   | "agreements"
   | "analytics"
   | "auditlog";
-type ClientTab = "billing" | "invoices" | "team" | "dialer" | "auditlog";
+type ClientTab = "billing" | "invoices" | "team" | "dialer" | "auditlog" | "approvals";
 
 export function DashboardPage() {
   const { claims, role, isPlatformAdmin, logout, token } = useAuth();
@@ -84,6 +85,10 @@ export function DashboardPage() {
   // Invoices are financial/legal documents — a manager can view usage
   // analytics for oversight, but invoices stay owner/admin only.
   const showInvoicesTab = showBillingTab && (role === "owner" || role === "admin");
+  // Only a VoxLink-internal manager reviews revoke/invoice-generation
+  // requests — a client company's own manager has no such authority over
+  // anyone's account, including their own.
+  const isInternalManager = role === "manager" && company?.isInternal === true;
 
   // Maps a notification's type to wherever that action actually lives —
   // "user_approval" means different tabs depending on whether this caller
@@ -94,10 +99,18 @@ export function DashboardPage() {
     if (isPlatformAdmin) {
       if (type === "user_approval" || type === "user_approval_pending") setPlatformTab("internal");
       else if (type === "price_change" || type === "price_change_pending") setPlatformTab("pricing");
-      else if (type === "company_approval" || type === "payment_verification") setPlatformTab("clients");
+      else if (
+        type === "company_approval" ||
+        type === "payment_verification" ||
+        type === "revoke_approval" ||
+        type === "revoke_pending" ||
+        type === "invoice_generation_pending"
+      )
+        setPlatformTab("clients");
     } else {
       if (type === "user_approval" || type === "user_approval_pending") setClientTab("team");
       else if (type === "agreement_unsigned") setClientTab("billing");
+      else if (type === "revoke_approval" || type === "invoice_generation_approval") setClientTab("approvals");
     }
   }
 
@@ -157,6 +170,11 @@ export function DashboardPage() {
             <button className={clientTab === "dialer" ? "tab active" : "tab"} onClick={() => setClientTab("dialer")}>
               Phone
             </button>
+            {isInternalManager && (
+              <button className={clientTab === "approvals" ? "tab active" : "tab"} onClick={() => setClientTab("approvals")}>
+                Approvals
+              </button>
+            )}
             {role === "owner" && (
               <button className={clientTab === "auditlog" ? "tab active" : "tab"} onClick={() => setClientTab("auditlog")}>
                 Audit log
@@ -233,6 +251,8 @@ export function DashboardPage() {
           <InvoicesView />
         ) : clientTab === "dialer" ? (
           <DialerPage />
+        ) : isInternalManager && clientTab === "approvals" ? (
+          <ApprovalsView />
         ) : clientTab === "auditlog" ? (
           <AuditLogView />
         ) : (

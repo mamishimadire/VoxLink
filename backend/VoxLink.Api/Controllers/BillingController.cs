@@ -369,20 +369,45 @@ public class BillingController : ControllerBase
     }
 
     /// <summary>
-    /// Platform-admin-triggered invoice covering usage from the current
-    /// subscription period's start through now, for VoxLink's own internal
-    /// usage. (A platform admin generating for a specific client instead
-    /// uses PlatformController's companies/{id}/invoices/generate.)
+    /// Platform-admin-triggered request for an invoice covering usage from
+    /// the current subscription period's start through now, for VoxLink's
+    /// own internal usage. Now always needs a manager's approval before it's
+    /// actually generated (see ApprovalsController) — this only submits the
+    /// request. (A platform admin requesting one for a specific client
+    /// instead uses PlatformController's companies/{id}/invoices/generate-request.)
     /// </summary>
-    [HttpPost("invoices/generate")]
+    [HttpPost("invoices/generate-request")]
     [Authorize(Policy = "PlatformAdmin")]
-    public async Task<IActionResult> GenerateInvoice(CancellationToken cancellationToken)
+    public async Task<IActionResult> ProposeInvoiceGeneration(CancellationToken cancellationToken)
     {
         var companyId = User.GetCompanyId();
+
+        var alreadyPending = await _db.InvoiceGenerationRequests.AnyAsync(
+            r => r.CompanyId == companyId && r.Status == "pending", cancellationToken);
+        if (alreadyPending)
+        {
+            return BadRequest(new { message = "An invoice generation request for this company is already pending review." });
+        }
+
         try
         {
-            var invoice = await _invoiceGenerationService.GenerateAdHocInvoiceAsync(companyId, cancellationToken);
-            return Ok(new { message = $"Invoice {invoice.InvoiceNumber} generated for R{invoice.AmountDue:0.00}.", invoice.Id, invoice.InvoiceNumber });
+            await _invoiceGenerationService.PreviewAdHocInvoiceAsync(companyId, cancellationToken);
+
+            var generationRequest = new InvoiceGenerationRequest
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = companyId,
+                ProposedBy = User.GetUserId(),
+                ProposedAt = DateTimeOffset.UtcNow,
+                Status = "pending"
+            };
+
+            _db.InvoiceGenerationRequests.Add(generationRequest);
+            AuditLogService.Log(_db, companyId, User.GetUserId(), User.GetEmail(), "invoice.generation_proposed", "company", companyId,
+                "Requested a manually-generated invoice");
+            await _db.SaveChangesAsync(cancellationToken);
+
+            return Ok(new { message = "Invoice generation request submitted. Awaiting a manager's approval.", generationRequest.Id });
         }
         catch (InvalidOperationException ex)
         {

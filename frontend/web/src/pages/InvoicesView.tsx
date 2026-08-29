@@ -158,8 +158,8 @@ export function InvoicesView() {
     try {
       const path =
         isPlatformAdmin && preview.companyId !== ownCompanyId
-          ? `/api/platform/companies/${preview.companyId}/invoices/generate`
-          : "/api/billing/invoices/generate";
+          ? `/api/platform/companies/${preview.companyId}/invoices/generate-request`
+          : "/api/billing/invoices/generate-request";
       const res = await api.post<{ message: string }>(path, {}, token);
       setMessage(res.message);
       closeGenerateModal();
@@ -253,7 +253,7 @@ export function InvoicesView() {
           <div style={{ flex: 1 }} />
           {canGenerate && (
             <button type="button" onClick={openGenerateModal}>
-              Generate invoice
+              Request invoice generation
             </button>
           )}
         </div>
@@ -326,7 +326,8 @@ export function InvoicesView() {
 
       {modalOpen && (
         <div className="card inline-card">
-          <h2>Generate invoice</h2>
+          <h2>Request invoice generation</h2>
+          <p className="hint">A manager must approve this before the invoice is actually created.</p>
 
           {isPlatformAdmin && (
             <label>
@@ -381,7 +382,7 @@ export function InvoicesView() {
 
           <div className="row">
             <button type="button" disabled={!preview || previewLoading || committing} onClick={handleComplete}>
-              {committing ? "Sending…" : "Complete and send"}
+              {committing ? "Submitting…" : "Submit for approval"}
             </button>
             <button type="button" className="link-btn" onClick={closeGenerateModal}>
               Cancel
