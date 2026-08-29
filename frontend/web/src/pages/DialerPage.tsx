@@ -15,6 +15,8 @@ import {
   User,
   Settings as SettingsIcon,
   Trash2,
+  Star,
+  Volume2,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -37,6 +39,7 @@ interface RecentCall {
   status: string;
   startedAt: string | null;
   durationSeconds: number;
+  isFavorite: boolean;
 }
 
 interface PhoneContact {
@@ -46,6 +49,7 @@ interface PhoneContact {
   phoneNumber: string;
   email: string | null;
   notes: string | null;
+  isFavorite: boolean;
 }
 
 const KEYS: [string, string][] = [
@@ -92,6 +96,40 @@ const DTMF_TONES: Record<string, [number, number]> = {
 };
 
 let dialToneAudioContext: AudioContext | null = null;
+
+// The Twilio Voice SDK plays remote call audio through a plain `new
+// Audio(...)` element that it never attaches to the document
+// (rtc/peerconnection.ts: `_createAudio`) — so `document.querySelectorAll
+// ("audio")` never finds it, and there's no public Call/Device API to reach
+// it either. Patching the global Audio constructor once, at module load
+// (before any call can possibly start), is the only way to get a live
+// reference: every Audio instance ever created — Twilio's included — gets
+// tracked here and kept in sync with the volume slider.
+let globalCallVolume = (() => {
+  const saved = localStorage.getItem("voxlink_call_volume");
+  return saved ? Number(saved) / 100 : 1;
+})();
+const trackedAudioElements = new Set<HTMLAudioElement>();
+
+if (typeof window !== "undefined" && !(window as { __voxlinkAudioPatched?: boolean }).__voxlinkAudioPatched) {
+  (window as { __voxlinkAudioPatched?: boolean }).__voxlinkAudioPatched = true;
+  const NativeAudio = window.Audio;
+  class VolumeTrackedAudio extends NativeAudio {
+    constructor(...args: ConstructorParameters<typeof Audio>) {
+      super(...args);
+      this.volume = globalCallVolume;
+      trackedAudioElements.add(this);
+    }
+  }
+  window.Audio = VolumeTrackedAudio as unknown as typeof Audio;
+}
+
+function setGlobalCallVolume(percent: number) {
+  globalCallVolume = percent / 100;
+  trackedAudioElements.forEach((el) => {
+    el.volume = globalCallVolume;
+  });
+}
 
 function playDialTone(digit: string) {
   const freqs = DTMF_TONES[digit];
@@ -150,6 +188,12 @@ export function DialerPage() {
   const [ringtoneEnabled, setRingtoneEnabled] = useState(() => loadSoundPref("voxlink_sound_ringtone"));
   const [alertEnabled, setAlertEnabled] = useState(() => loadSoundPref("voxlink_sound_alert"));
   const [dialPadToneEnabled, setDialPadToneEnabled] = useState(() => loadSoundPref("voxlink_sound_dialpad"));
+
+  const [volume, setVolume] = useState(() => {
+    const saved = localStorage.getItem("voxlink_call_volume");
+    return saved ? Number(saved) : 100;
+  });
+  const [volumeOpen, setVolumeOpen] = useState(false);
 
   function refreshDeviceLists(device: Device) {
     if (!device.audio) return;
@@ -231,6 +275,12 @@ export function DialerPage() {
     };
   }, [callState]);
 
+  function changeVolume(value: number) {
+    setVolume(value);
+    localStorage.setItem("voxlink_call_volume", String(value));
+    setGlobalCallVolume(value);
+  }
+
   function loadRecents() {
     api
       .get<RecentCall[]>("/api/calls/recent", token)
@@ -283,6 +333,28 @@ export function DialerPage() {
       setRecents((current) => (current ? current.filter((r) => r.id !== id) : current));
     } catch (err) {
       setRecentsError(err instanceof Error ? err.message : "Failed to delete call.");
+    }
+  }
+
+  async function toggleContactFavorite(contact: PhoneContact) {
+    const next = !contact.isFavorite;
+    setContacts((current) => (current ? current.map((c) => (c.id === contact.id ? { ...c, isFavorite: next } : c)) : current));
+    try {
+      await api.put(`/api/contacts/${contact.id}/favorite`, { isFavorite: next }, token);
+    } catch (err) {
+      setContacts((current) => (current ? current.map((c) => (c.id === contact.id ? { ...c, isFavorite: !next } : c)) : current));
+      setContactsError(err instanceof Error ? err.message : "Failed to update favorite.");
+    }
+  }
+
+  async function toggleRecentFavorite(call: RecentCall) {
+    const next = !call.isFavorite;
+    setRecents((current) => (current ? current.map((r) => (r.id === call.id ? { ...r, isFavorite: next } : r)) : current));
+    try {
+      await api.put(`/api/calls/${call.id}/favorite`, { isFavorite: next }, token);
+    } catch (err) {
+      setRecents((current) => (current ? current.map((r) => (r.id === call.id ? { ...r, isFavorite: !next } : r)) : current));
+      setRecentsError(err instanceof Error ? err.message : "Failed to update favorite.");
     }
   }
 
@@ -444,7 +516,27 @@ export function DialerPage() {
           {screen === "keypad" && (
             <div className="softphone-keypad-screen">
               <div className="softphone-dialer-col">
-                <div className="softphone-dialer-header">Active Calls</div>
+                <div className="softphone-dialer-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative" }}>
+                  Active Calls
+                  <Volume2
+                    size={18}
+                    className="softphone-muted-icon"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setVolumeOpen((v) => !v)}
+                  />
+                  {volumeOpen && (
+                    <div className="softphone-volume-popup">
+                      <Volume2 size={14} className="softphone-muted-icon" />
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={volume}
+                        onChange={(e) => changeVolume(Number(e.target.value))}
+                      />
+                    </div>
+                  )}
+                </div>
 
                 <div className="softphone-dialer-card">
                   <div className="softphone-caller-id">Caller ID: {claims?.email ?? "you"}</div>
@@ -574,6 +666,16 @@ export function DialerPage() {
                       {r.direction === "outbound" ? "Outbound call" : "Inbound call"}
                     </div>
                     <div className="softphone-recent-time">{formatWhen(r.startedAt)}</div>
+                    <Star
+                      size={15}
+                      className="softphone-favorite-icon"
+                      fill={r.isFavorite ? "#f0a83f" : "none"}
+                      color={r.isFavorite ? "#f0a83f" : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleRecentFavorite(r);
+                      }}
+                    />
                     <Trash2
                       size={15}
                       className="softphone-delete-icon"
@@ -626,6 +728,16 @@ export function DialerPage() {
                       </div>
                       <div className="softphone-recent-sub">{c.phoneNumber}</div>
                     </div>
+                    <Star
+                      size={15}
+                      className="softphone-favorite-icon"
+                      fill={c.isFavorite ? "#f0a83f" : "none"}
+                      color={c.isFavorite ? "#f0a83f" : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleContactFavorite(c);
+                      }}
+                    />
                     <Trash2
                       size={15}
                       className="softphone-delete-icon"

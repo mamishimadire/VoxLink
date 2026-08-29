@@ -17,7 +17,9 @@ public record DialRequest(string To);
 
 public record RecentCallResponse(
     Guid Id, string DestinationNumber, string Direction, string Status,
-    DateTimeOffset? StartedAt, int DurationSeconds);
+    DateTimeOffset? StartedAt, int DurationSeconds, bool IsFavorite);
+
+public record SetCallFavoriteRequest(bool IsFavorite);
 
 [ApiController]
 [Authorize]
@@ -76,12 +78,24 @@ public class CallsController : ControllerBase
         var userId = User.GetUserId();
         var calls = await _db.Calls
             .Where(c => c.UserId == userId && c.DeletedAt == null)
-            .OrderByDescending(c => c.StartedAt)
+            .OrderByDescending(c => c.IsFavorite).ThenByDescending(c => c.StartedAt)
             .Take(50)
-            .Select(c => new RecentCallResponse(c.Id, c.DestinationNumber, c.Direction, c.Status, c.StartedAt, c.DurationSeconds))
+            .Select(c => new RecentCallResponse(c.Id, c.DestinationNumber, c.Direction, c.Status, c.StartedAt, c.DurationSeconds, c.IsFavorite))
             .ToListAsync(cancellationToken);
 
         return Ok(calls);
+    }
+
+    [HttpPut("{id:guid}/favorite")]
+    public async Task<IActionResult> SetFavorite(Guid id, SetCallFavoriteRequest request, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        var call = await _db.Calls.FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId, cancellationToken);
+        if (call is null) return NotFound();
+
+        call.IsFavorite = request.IsFavorite;
+        await _db.SaveChangesAsync(cancellationToken);
+        return NoContent();
     }
 
     [HttpDelete("{id:guid}")]

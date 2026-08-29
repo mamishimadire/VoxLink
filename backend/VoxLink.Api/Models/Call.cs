@@ -16,6 +16,7 @@ public class Call
     public string? ProviderCallId { get; set; }
     public decimal CarrierCost { get; set; }
     public decimal CustomerCharge { get; set; }
+    public bool IsFavorite { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 
     // Hides a call from the user's own call-history view without removing

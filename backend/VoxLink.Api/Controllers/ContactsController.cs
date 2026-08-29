@@ -7,8 +7,9 @@ using VoxLink.Api.Models;
 
 namespace VoxLink.Api.Controllers;
 
-public record ContactResponse(Guid Id, string? FirstName, string? LastName, string PhoneNumber, string? Email, string? Notes);
+public record ContactResponse(Guid Id, string? FirstName, string? LastName, string PhoneNumber, string? Email, string? Notes, bool IsFavorite);
 public record CreateContactRequest(string? FirstName, string? LastName, string PhoneNumber, string? Email, string? Notes);
+public record SetFavoriteRequest(bool IsFavorite);
 
 [ApiController]
 [Authorize]
@@ -26,11 +27,22 @@ public class ContactsController : ControllerBase
     public async Task<IActionResult> GetContacts(CancellationToken cancellationToken)
     {
         var contacts = await _db.Contacts
-            .OrderBy(c => c.FirstName).ThenBy(c => c.LastName)
-            .Select(c => new ContactResponse(c.Id, c.FirstName, c.LastName, c.PhoneNumber, c.Email, c.Notes))
+            .OrderByDescending(c => c.IsFavorite).ThenBy(c => c.FirstName).ThenBy(c => c.LastName)
+            .Select(c => new ContactResponse(c.Id, c.FirstName, c.LastName, c.PhoneNumber, c.Email, c.Notes, c.IsFavorite))
             .ToListAsync(cancellationToken);
 
         return Ok(contacts);
+    }
+
+    [HttpPut("{id:guid}/favorite")]
+    public async Task<IActionResult> SetFavorite(Guid id, SetFavoriteRequest request, CancellationToken cancellationToken)
+    {
+        var contact = await _db.Contacts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (contact is null) return NotFound();
+
+        contact.IsFavorite = request.IsFavorite;
+        await _db.SaveChangesAsync(cancellationToken);
+        return NoContent();
     }
 
     [HttpPost]
@@ -56,7 +68,7 @@ public class ContactsController : ControllerBase
         _db.Contacts.Add(contact);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Ok(new ContactResponse(contact.Id, contact.FirstName, contact.LastName, contact.PhoneNumber, contact.Email, contact.Notes));
+        return Ok(new ContactResponse(contact.Id, contact.FirstName, contact.LastName, contact.PhoneNumber, contact.Email, contact.Notes, contact.IsFavorite));
     }
 
     [HttpDelete("{id:guid}")]
