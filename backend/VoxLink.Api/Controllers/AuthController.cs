@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using VoxLink.Api.Auditing;
 using VoxLink.Api.Auth;
 using VoxLink.Api.Billing;
 using VoxLink.Api.Data;
@@ -161,10 +162,25 @@ public class AuthController : ControllerBase
         }
 
         PasswordPolicy.RegisterSuccessfulLogin(user);
+        AuditLogService.Log(_db, user.CompanyId, user.Id, user.Email, "auth.login", "user", user.Id, "Signed in");
         await _db.SaveChangesAsync(cancellationToken);
 
         var token = _jwtTokenService.GenerateToken(user);
         return Ok(new AuthResponse(token, user.Id, user.CompanyId, user.Role));
+    }
+
+    /// <summary>
+    /// The JWT itself is stateless (nothing to revoke server-side) — this
+    /// exists purely so "signed out" appears in the audit trail. The
+    /// frontend calls it right before discarding its own token.
+    /// </summary>
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    {
+        AuditLogService.Log(_db, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "auth.logout", "user", User.GetUserId(), "Signed out");
+        await _db.SaveChangesAsync(cancellationToken);
+        return NoContent();
     }
 
     [HttpPost("change-password")]

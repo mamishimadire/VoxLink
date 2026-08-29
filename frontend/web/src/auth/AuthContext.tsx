@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { decodeToken, getRole, isBusinessOwner, isPlatformAdmin, type VoxLinkClaims } from "./jwt";
 import { clearCachedTheme } from "../theme";
+import { api } from "../api/client";
 
 interface AuthState {
   token: string | null;
@@ -29,6 +30,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    // Fire-and-forget, purely so "signed out" lands in the audit trail — the
+    // JWT itself is stateless, so there's nothing to actually revoke, and a
+    // failed request here must never block the user from signing out.
+    if (token) {
+      api.post("/api/auth/logout", undefined, token).catch(() => {});
+    }
     sessionStorage.removeItem(STORAGE_KEY);
     setToken(null);
     // Theme is per-user, not per-browser — don't let it leak into the next

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using VoxLink.Api.Auditing;
 using VoxLink.Api.Auth;
 using VoxLink.Api.Billing;
 using VoxLink.Api.Data;
@@ -55,9 +56,10 @@ public class CallsController : ControllerBase
         var result = await _twilioClient.DialAsync(to, cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
+        var callId = Guid.NewGuid();
         _db.Calls.Add(new Call
         {
-            Id = Guid.NewGuid(),
+            Id = callId,
             CompanyId = User.GetCompanyId(),
             UserId = User.GetUserId(),
             DestinationNumber = to,
@@ -67,6 +69,8 @@ public class CallsController : ControllerBase
             StartedAt = now,
             CreatedAt = now
         });
+        AuditLogService.Log(_db, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "call.placed", "call", callId,
+            $"Called {to}");
         await _db.SaveChangesAsync(cancellationToken);
 
         return Content(result.RawJson, "application/json");
@@ -144,9 +148,10 @@ public class CallsController : ControllerBase
             if (user is not null)
             {
                 var now = DateTimeOffset.UtcNow;
+                var callId = Guid.NewGuid();
                 _serviceDb.Calls.Add(new Call
                 {
-                    Id = Guid.NewGuid(),
+                    Id = callId,
                     CompanyId = user.CompanyId,
                     UserId = user.Id,
                     DestinationNumber = to,
@@ -156,6 +161,8 @@ public class CallsController : ControllerBase
                     StartedAt = now,
                     CreatedAt = now
                 });
+                AuditLogService.Log(_serviceDb, user.CompanyId, user.Id, user.Email, "call.placed", "call", callId,
+                    $"Called {to}");
                 await _serviceDb.SaveChangesAsync(cancellationToken);
             }
         }
