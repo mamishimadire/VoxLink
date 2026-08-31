@@ -19,7 +19,7 @@ import {
   Volume2,
   Delete,
 } from "lucide-react";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { LogoutConfirmModal } from "../components/LogoutConfirmModal";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
@@ -34,6 +34,34 @@ const STATUS_COLORS: Record<PresenceStatus, string> = {
   Away: "#f0a83f",
   DND: "#e74c3c",
 };
+
+// The calling SDK's own errors carry its internal vendor name, error codes,
+// and wording (e.g. "AccessTokenInvalid (20101): ...") — never shown to the
+// user as-is, since that exposes which third-party service the phone system
+// runs on. Logs the real detail to the console for debugging, and maps a
+// handful of common, actionable codes to plain-language guidance; anything
+// unrecognized falls back to one generic message.
+function friendlyCallError(err: unknown): string {
+  console.error("Softphone error:", err);
+  const code = (err as { code?: number } | null)?.code;
+
+  switch (code) {
+    case 20101:
+    case 20104:
+    case 20151:
+      return "Your session has expired. Please refresh the page and sign in again.";
+    case 31401:
+    case 31402:
+    case 31003:
+      return "We couldn't access your microphone. Check your browser's microphone permissions and try again.";
+    case 31009:
+    case 31005:
+    case 53000:
+      return "Lost connection to the calling service. Check your internet connection and try again.";
+    default:
+      return "There was a problem with your phone connection. Please refresh the page, or try again in a moment.";
+  }
+}
 
 interface RecentCall {
   id: string;
@@ -235,7 +263,7 @@ export function DialerPage() {
         const device = new Device(voiceToken);
         device.on("registered", () => setReady(true));
         device.on("unregistered", () => setReady(false));
-        device.on("error", (err) => setError(err.message));
+        device.on("error", (err) => setError(friendlyCallError(err)));
         device.on("tokenWillExpire", async () => {
           const refreshed = await api.get<{ token: string }>("/api/calls/voice-token", token);
           device.updateToken(refreshed.token);
@@ -248,9 +276,9 @@ export function DialerPage() {
         device.audio?.incoming(loadSoundPref("voxlink_sound_ringtone"));
         device.audio?.disconnect(loadSoundPref("voxlink_sound_alert"));
       } catch (err) {
-        console.error("Softphone setup failed:", err);
-        const detail = err instanceof Error ? err.message : String(err);
-        setError(`Could not set up the softphone: ${detail}`);
+        // A failed voice-token fetch already has a clean, safe message from
+        // the API client — only the calling SDK's own errors need scrubbing.
+        setError(err instanceof ApiError ? err.message : friendlyCallError(err));
       }
     }
 
@@ -450,7 +478,7 @@ export function DialerPage() {
       call.on("cancel", resetAfterCall);
       call.on("reject", resetAfterCall);
       call.on("error", (err) => {
-        setError(err.message);
+        setError(friendlyCallError(err));
         resetAfterCall();
       });
     } catch {
