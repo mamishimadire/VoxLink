@@ -30,6 +30,8 @@ public record ResetPasswordRequest(string Token, string NewPassword);
 
 public record AuthResponse(string Token, Guid UserId, Guid CompanyId, string Role);
 
+public record LogoutRequest(string? Reason);
+
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase
@@ -177,9 +179,12 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("logout")]
     [Authorize]
-    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    public async Task<IActionResult> Logout(LogoutRequest? request, CancellationToken cancellationToken)
     {
-        AuditLogService.Log(_db, User.GetCompanyId(), User.GetUserId(), User.GetEmail(), "auth.logout", "user", User.GetUserId(), "Signed out");
+        var isIdleTimeout = request?.Reason == "idle_timeout";
+        AuditLogService.Log(_db, User.GetCompanyId(), User.GetUserId(), User.GetEmail(),
+            isIdleTimeout ? "auth.session_timeout" : "auth.logout", "user", User.GetUserId(),
+            isIdleTimeout ? "Automatically signed out after 30 minutes of inactivity" : "Signed out");
         await _db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }

@@ -2,6 +2,8 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import { decodeToken, getRole, isBusinessOwner, isPlatformAdmin, type VoxLinkClaims } from "./jwt";
 import { clearCachedTheme } from "../theme";
 import { api } from "../api/client";
+import { useIdleLogout } from "./useIdleLogout";
+import { IdleWarningModal } from "../components/IdleWarningModal";
 
 interface AuthState {
   token: string | null;
@@ -10,7 +12,7 @@ interface AuthState {
   isPlatformAdmin: boolean;
   isBusinessOwner: boolean;
   login: (token: string) => void;
-  logout: () => void;
+  logout: (reason?: "idle_timeout") => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -29,12 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(newToken);
   };
 
-  const logout = () => {
+  const logout = (reason?: "idle_timeout") => {
     // Fire-and-forget, purely so "signed out" lands in the audit trail — the
     // JWT itself is stateless, so there's nothing to actually revoke, and a
     // failed request here must never block the user from signing out.
     if (token) {
-      api.post("/api/auth/logout", undefined, token).catch(() => {});
+      api.post("/api/auth/logout", { reason }, token).catch(() => {});
     }
     sessionStorage.removeItem(STORAGE_KEY);
     setToken(null);
@@ -43,6 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.documentElement.removeAttribute("data-theme");
     clearCachedTheme();
   };
+
+  // Signs out automatically after 30 minutes with no interaction anywhere in
+  // the app (not just the phone), with a 5-minute warning first — runs for
+  // the whole authenticated session regardless of which page is showing.
+  const { secondsUntilLogout, stayLoggedIn } = useIdleLogout(token !== null, () => logout("idle_timeout"));
 
   return (
     <AuthContext.Provider
@@ -57,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      {secondsUntilLogout !== null && <IdleWarningModal secondsLeft={secondsUntilLogout} onStaySignedIn={stayLoggedIn} />}
     </AuthContext.Provider>
   );
 }
