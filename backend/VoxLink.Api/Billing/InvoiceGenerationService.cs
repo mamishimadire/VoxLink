@@ -80,8 +80,12 @@ public class InvoiceGenerationService
     }
 
     /// <summary>
-    /// Grace period enforcement: any active company with an unpaid invoice past
-    /// its due date gets suspended (blocks login) until it's paid.
+    /// Grace period enforcement: any active CLIENT company with an unpaid
+    /// invoice past its due date gets suspended (blocks login) until it's
+    /// paid. Never VoxLink's own internal company — its "invoices" are only
+    /// internal cost tracking, nobody actually pays them, so applying this
+    /// grace-period rule to it would lock the platform's own owner out the
+    /// first time an internal invoice went unpaid past its due date.
     /// </summary>
     private async Task<int> SuspendOverdueAccountsAsync(CancellationToken cancellationToken)
     {
@@ -95,7 +99,7 @@ public class InvoiceGenerationService
         if (overdueCompanyIds.Count == 0) return 0;
 
         var companies = await _db.Companies
-            .Where(c => overdueCompanyIds.Contains(c.Id) && c.Status == "active")
+            .Where(c => overdueCompanyIds.Contains(c.Id) && c.Status == "active" && !c.IsInternal)
             .ToListAsync(cancellationToken);
 
         foreach (var company in companies)
